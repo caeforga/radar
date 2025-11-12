@@ -1,0 +1,351 @@
+# ===================================
+# Software Radar - .gitignore
+# ===================================
+
+# ============== Python ==============
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+
+# ============== IDEs ==============
+# Visual Studio Code
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Eclipse
+.project
+.pydevproject
+.settings/
+
+# Notepad++
+*.bak
+
+
+# ============== Sistema Operativo ==============
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.directory
+.Trash-*
+.nfs*
+
+
+# ============== Específico del Proyecto ==============
+# Imágenes generadas por la aplicación
+radar.png
+rotada.png
+total.png
+mapa.png
+marcador.png
+
+# Archivos de salida del radar
+output/Lecturas RADAR/*.csv
+output/RawData/*.sal
+output/salida.csv
+output/salida_vp.csv
+!output/Lecturas RADAR/.gitkeep
+!output/RawData/.gitkeep
+
+# Datos del sensor meteorológico (pueden ser grandes)
+CR310_RK900_10.csv
+
+# Archivos temporales de Logic Analyzer
+*.sal
+
+# Capturas y logs
+*.log
+*.txt
+!requirements.txt
+!README.md
+
+# Backups
+*.backup
+*.old
+*.orig
+
+
+# ============== Hardware / Firmware ==============
+# Arduino / ESP32
+*.hex
+*.bin
+*.elf
+*.map
+
+# KiCad temporales
+*.bak
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*-save.kicad_pcb
+*-save.kicad_sch
+fp-info-cache
+*.net
+*.dsn
+*.ses
+
+# Gerbers comprimidos (opcional, descomenta si quieres versionarlos)
+# *.rar
+# *.zip
+
+
+# ============== Datos y Configuración ==============
+# Archivos de configuración local
+config.ini
+config.json
+settings.json
+.env.local
+
+# Bases de datos
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos grandes de datos
+*.xlsx
+*.xls
+!output/Lecturas RADAR/Registro capturas.xlsx
+
+
+# ============== Multimedia ==============
+# Imágenes temporales (mantener las de /imagenes/)
+*.jpg
+*.jpeg
+*.png
+!imagenes/*.png
+!imagenes/*.jpg
+
+# Videos
+*.mp4
+*.avi
+*.mov
+
+# Archivos de audio
+*.wav
+*.mp3
+
+
+# ============== Documentación ==============
+# PDFs generados
+*.pdf
+!docs/*.pdf
+
+# Office temporales
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
+
+# ============== Testing ==============
+# Test outputs
+test_output/
+test_results/
+.test/
+
+# Coverage
+htmlcov/
+.coverage
+
+
+# ============== Otros ==============
+# Archivos comprimidos
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Archivos de bloqueo
+*.lock
+
+# Temporales de Python
+*.swp
+*.swo
+*~
+
+# Logs de npm (si usas Node para algo)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules/
+
+
+# ============== Keep carpetas vacías ==============
+# Para mantener estructura de carpetas en Git
+!.gitkeep
+

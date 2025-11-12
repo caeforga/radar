@@ -1,0 +1,110 @@
+# ===================================
+# Software Radar - .gitattributes
+# ===================================
+
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# ============== Archivos de Código ==============
+# Python
+*.py text eol=lf
+*.pyw text eol=lf
+*.pyx text eol=lf
+*.pxd text eol=lf
+*.pxi text eol=lf
+
+# Configuration
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+*.config text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Batch scripts (Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+
+# ============== Documentación ==============
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf
+LICENSE text eol=lf
+README text eol=lf
+
+
+# ============== Datos ==============
+# CSV files
+*.csv text eol=lf
+
+# Archivos de salida del radar
+*.sal binary
+
+
+# ============== Arduino / Firmware ==============
+*.ino text eol=lf
+*.h text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+
+
+# ============== KiCad ==============
+*.kicad_pcb text eol=lf
+*.kicad_sch text eol=lf
+*.kicad_pro text eol=lf
+*.kicad_prl text eol=lf
+*.gbr binary
+*.drl binary
+
+
+# ============== Imágenes ==============
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.svg text
+
+
+# ============== Archivos comprimidos ==============
+*.zip binary
+*.7z binary
+*.gz binary
+*.tar binary
+*.rar binary
+
+
+# ============== Office ==============
+*.xlsx binary
+*.xls binary
+*.doc binary
+*.docx binary
+*.pdf binary
+
+
+# ============== Git ==============
+.gitattributes export-ignore
+.gitignore export-ignore
+.gitkeep export-ignore
+
+
+# ============== Exportar ==============
+# Excluir archivos de desarrollo al crear archives
+.vscode/ export-ignore
+.idea/ export-ignore
+__pycache__/ export-ignore
+*.pyc export-ignore
+venv/ export-ignore
+.env export-ignore
+output/ export-ignore
+*.log export-ignore
+
