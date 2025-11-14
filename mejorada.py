@@ -22,10 +22,6 @@ from PIL import Image, ImageTk, ImageDraw
 import io
 import CargaSensor as CS
 
-
-
-
-
 carpeta_principal = os.path.dirname(__file__)
 carpeta_imagenes = os.path.join(carpeta_principal, "imagenes")
 ctk.set_appearance_mode("dark")
