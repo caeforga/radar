@@ -279,22 +279,29 @@ class ResponsiveRadarApp:
         self.current_panel = welcome_frame
     
     def show_control_panel(self):
-        """Muestra el panel de control."""
-        logger.info("Mostrando panel de control")
+        """Muestra el panel de control responsivo."""
+        logger.info("Mostrando panel de control responsivo")
         
-        # Importar panel de control legacy
+        # Importar panel de control responsivo
         if self.objeto_control is None:
             try:
-                from mejorada import panel_control
-                self.objeto_control = panel_control(self.root, self.container, self.serial)
-                logger.info("Panel de control creado")
+                from src.ui.panels import ResponsiveControlPanel
+                self.objeto_control = ResponsiveControlPanel(self.root, self.container, self.serial)
+                logger.info("Panel de control responsivo creado")
             except Exception as e:
-                logger.error(f"Error al crear panel de control: {e}")
-                messagebox.showerror(
-                    "Error",
-                    f"No se pudo cargar el panel de control:\n{str(e)}"
-                )
-                return
+                logger.error(f"Error al crear panel de control responsivo: {e}")
+                logger.info("Intentando cargar versión legacy...")
+                try:
+                    from mejorada import panel_control
+                    self.objeto_control = panel_control(self.root, self.container, self.serial)
+                    logger.info("Panel de control legacy cargado como fallback")
+                except Exception as e2:
+                    logger.error(f"Error al cargar fallback: {e2}")
+                    messagebox.showerror(
+                        "Error",
+                        f"No se pudo cargar el panel de control:\n{str(e)}\n\nFallback: {str(e2)}"
+                    )
+                    return
         
         # Mostrar panel
         if self.current_panel:
@@ -310,8 +317,8 @@ class ResponsiveRadarApp:
         self._highlight_active_button(self.btn_control)
     
     def show_visualization_panel(self):
-        """Muestra el panel de visualización."""
-        logger.info("Mostrando panel de visualización")
+        """Muestra el panel de visualización responsivo."""
+        logger.info("Mostrando panel de visualización responsivo")
         
         # Verificar conexión serial
         if not self.serial.status:
@@ -321,24 +328,36 @@ class ResponsiveRadarApp:
             )
             return
         
-        # Importar panel de visualización legacy
+        # Importar panel de visualización responsivo
         if self.objeto_visualizacion is None:
             try:
-                from mejorada import panel_visualizacion
-                self.objeto_visualizacion = panel_visualizacion(
+                from src.ui.panels import ResponsiveVisualizationPanel
+                self.objeto_visualizacion = ResponsiveVisualizationPanel(
                     self.root,
                     self.container,
                     self.serial
                 )
                 self.objeto_visualizacion.iniciar()
-                logger.info("Panel de visualización creado")
+                logger.info("Panel de visualización responsivo creado")
             except Exception as e:
-                logger.error(f"Error al crear panel de visualización: {e}")
-                messagebox.showerror(
-                    "Error",
-                    f"No se pudo cargar el panel de visualización:\n{str(e)}"
-                )
-                return
+                logger.error(f"Error al crear panel de visualización responsivo: {e}")
+                logger.info("Intentando cargar versión legacy...")
+                try:
+                    from mejorada import panel_visualizacion
+                    self.objeto_visualizacion = panel_visualizacion(
+                        self.root,
+                        self.container,
+                        self.serial
+                    )
+                    self.objeto_visualizacion.iniciar()
+                    logger.info("Panel de visualización legacy cargado como fallback")
+                except Exception as e2:
+                    logger.error(f"Error al cargar fallback: {e2}")
+                    messagebox.showerror(
+                        "Error",
+                        f"No se pudo cargar el panel de visualización:\n{str(e)}\n\nFallback: {str(e2)}"
+                    )
+                    return
         
         # Mostrar panel
         if self.current_panel:
