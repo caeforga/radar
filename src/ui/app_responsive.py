@@ -151,8 +151,8 @@ class ResponsiveRadarApp:
         subtitle.pack()
         
         # ==================== BOTONES DE NAVEGACIÓN ====================
-        # Cargar iconos
-        icon_size = (40, 40)
+        # Cargar iconos con tamaño optimizado
+        icon_size = (35, 35)  # Tamaño más compacto y profesional
         
         try:
             icon_control_img = Image.open(os.path.join(carpeta_imagenes, "Icono palanca.png"))
@@ -176,35 +176,37 @@ class ResponsiveRadarApp:
             self.icon_radar = None
             logger.warning("No se pudo cargar icono de radar")
         
-        # Botón Control
+        # Botón Control - Diseño mejorado
         self.btn_control = ctk.CTkButton(
             self.menu,
-            text="Control",
+            text="  Control",  # Espacio extra para separación del icono
             image=self.icon_control,
             compound="left",
-            font=("Arial", 14, "bold"),
-            height=50,
+            anchor="w",  # Alinear contenido a la izquierda
+            font=("Arial", 15, "bold"),
+            height=55,  # Más altura para mejor visualización
             corner_radius=10,
             fg_color="#2B5278",
             hover_color="#3D6A91",
             command=self.show_control_panel
         )
-        self.btn_control.grid(row=1, column=0, pady=10, padx=20, sticky="ew")
+        self.btn_control.grid(row=1, column=0, pady=5, padx=10, sticky="ew")
         
-        # Botón Visualización
+        # Botón Visualización - Diseño mejorado
         self.btn_visualizacion = ctk.CTkButton(
             self.menu,
-            text="Visualización",
+            text="  Visualización",  # Espacio extra para separación del icono
             image=self.icon_radar,
             compound="left",
-            font=("Arial", 14, "bold"),
-            height=50,
+            anchor="w",  # Alinear contenido a la izquierda
+            font=("Arial", 15, "bold"),
+            height=55,  # Más altura para mejor visualización
             corner_radius=10,
             fg_color="#2B5278",
             hover_color="#3D6A91",
             command=self.show_visualization_panel
         )
-        self.btn_visualizacion.grid(row=2, column=0, pady=10, padx=20, sticky="ew")
+        self.btn_visualizacion.grid(row=2, column=0, pady=5, padx=10, sticky="ew")
         
         # ==================== INFO DE CONEXIÓN ====================
         self.connection_frame = ctk.CTkFrame(
