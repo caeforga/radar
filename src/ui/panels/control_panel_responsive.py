@@ -207,13 +207,13 @@ class ResponsiveControlPanel:
         self.combobox_baud.grid(row=4, column=0, pady=(0, 20), padx=10, sticky="ew")
         self.combobox_baud.set("9600")
         
-        # Botones de conexión
+        # Botones de conexión con paleta profesional
         self.bt_conectar = ctk.CTkButton(
             self.frameCock,
             text='🔌 Conectar',
             font=('Arial', 13, 'bold'),
-            fg_color='green',
-            hover_color='darkgreen',
+            fg_color='#16a34a',  # Verde profesional
+            hover_color='#15803d',
             height=40,
             command=self.conectar_serial
         )
@@ -223,8 +223,8 @@ class ResponsiveControlPanel:
             self.frameCock,
             text='🔄 Actualizar Puertos',
             font=('Arial', 13, 'bold'),
-            fg_color='#9333ea',
-            hover_color='#7e22ce',
+            fg_color='#475569',  # Gris neutro para acciones secundarias
+            hover_color='#334155',
             height=40,
             command=self.actualizar_puertos
         )
@@ -234,8 +234,8 @@ class ResponsiveControlPanel:
             self.frameCock,
             text='❌ Desconectar',
             font=('Arial', 13, 'bold'),
-            fg_color='red',
-            hover_color='darkred',
+            fg_color='#dc2626',  # Rojo sobrio para acciones destructivas
+            hover_color='#991b1b',
             height=40,
             command=self.desconectar_serial,
             state='disabled'
@@ -293,13 +293,13 @@ class ResponsiveControlPanel:
         )
         self.labelEncendido.pack(side="left")
         
-        # Botones en grid 2x2
+        # Botones en grid 2x2 con paleta profesional
         self.botonOFF = ctk.CTkButton(
             self.frameOperacion,
             text='⭘ Apagar',
             font=('Arial', 12, 'bold'),
-            fg_color='red',
-            hover_color='darkred',
+            fg_color='#dc2626',  # Rojo sobrio - Crítico
+            hover_color='#991b1b',
             height=45,
             command=self.apagarRadar,
             state='disabled'
@@ -310,8 +310,8 @@ class ResponsiveControlPanel:
             self.frameOperacion,
             text='⏸ Standby',
             font=('Arial', 12, 'bold'),
-            fg_color='blue',
-            hover_color='darkblue',
+            fg_color='#2563eb',  # Azul profesional - Pausa
+            hover_color='#1e40af',
             height=45,
             command=self.modoStandby,
             state='disabled'
@@ -322,8 +322,8 @@ class ResponsiveControlPanel:
             self.frameOperacion,
             text='⚠ TEST',
             font=('Arial', 12, 'bold'),
-            fg_color='orange',
-            hover_color='darkorange',
+            fg_color='#ea580c',  # Naranja sobrio - Advertencia
+            hover_color='#c2410c',
             height=45,
             command=self.modoTEST,
             state='disabled'
@@ -334,8 +334,8 @@ class ResponsiveControlPanel:
             self.frameOperacion,
             text='✓ ON',
             font=('Arial', 12, 'bold'),
-            fg_color='green',
-            hover_color='darkgreen',
+            fg_color='#16a34a',  # Verde profesional - Activo
+            hover_color='#15803d',
             height=45,
             command=self.modoON,
             state='disabled'
@@ -418,14 +418,14 @@ class ResponsiveControlPanel:
         self.frameBotones.grid_columnconfigure(1, weight=1)
         self.frameBotones.grid_columnconfigure(2, weight=1)
         
-        # Rango
+        # Rango (RNG) - Tono ámbar profesional
         self.botonRNGarriba = ctk.CTkButton(
             self.frameBotones,
             text='RNG ▲',
             font=('Arial', 12, 'bold'),
-            fg_color='#eab308',
-            hover_color='#ca8a04',
-            text_color='black',
+            fg_color='#ca8a04',  # Ámbar oscuro - Ajuste de escala
+            hover_color='#a16207',
+            text_color='white',  # Texto blanco para mejor contraste
             height=40,
             command=self.rangoArriba,
             state='disabled'
@@ -445,35 +445,35 @@ class ResponsiveControlPanel:
             self.frameBotones,
             text='RNG ▼',
             font=('Arial', 12, 'bold'),
-            fg_color='#eab308',
-            hover_color='#ca8a04',
-            text_color='black',
+            fg_color='#ca8a04',  # Ámbar oscuro - Ajuste de escala
+            hover_color='#a16207',
+            text_color='white',  # Texto blanco para mejor contraste
             height=40,
             command=self.rangoAbajo,
             state='disabled'
         )
         self.botonRNGabajo.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
         
-        # Perfil Vertical
+        # Perfil Vertical (VP) - Púrpura para función especial
         self.botonVp = ctk.CTkButton(
             self.frameBotones,
             text='VP',
             font=('Arial', 12, 'bold'),
-            fg_color='red',
-            hover_color='darkred',
+            fg_color='#7c3aed',  # Púrpura profesional - Función especial
+            hover_color='#6d28d9',
             height=90,
             command=self.perfilVertical,
             state='disabled'
         )
         self.botonVp.grid(row=0, column=1, rowspan=4, padx=5, pady=5, sticky="nsew")
         
-        # Track
+        # Track (TRK) - Azul cian para navegación
         self.botonTRKizquierda = ctk.CTkButton(
             self.frameBotones,
             text='TRK ◄',
             font=('Arial', 12, 'bold'),
-            fg_color='#3b82f6',
-            hover_color='#2563eb',
+            fg_color='#0891b2',  # Cian profesional - Navegación
+            hover_color='#0e7490',
             height=40,
             command=self.trakerIzquierda,
             state='disabled'
@@ -493,8 +493,8 @@ class ResponsiveControlPanel:
             self.frameBotones,
             text='TRK ►',
             font=('Arial', 12, 'bold'),
-            fg_color='#3b82f6',
-            hover_color='#2563eb',
+            fg_color='#0891b2',  # Cian profesional - Navegación
+            hover_color='#0e7490',
             height=40,
             command=self.trakerDerecha,
             state='disabled'
@@ -730,10 +730,10 @@ class ResponsiveControlPanel:
     def perfilVertical(self):
         if self.perfil == 0:
             self.perfil = 1
-            self.botonVp.configure(fg_color='green')
+            self.botonVp.configure(fg_color='#16a34a', hover_color='#15803d')  # Verde cuando activo
         else:
             self.perfil = 0
-            self.botonVp.configure(fg_color='red')
+            self.botonVp.configure(fg_color='#7c3aed', hover_color='#6d28d9')  # Púrpura cuando inactivo
         self.datos_arduino.enviar_datos("vp")
     
     def trakerIzquierda(self):
