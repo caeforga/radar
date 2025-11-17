@@ -4,6 +4,7 @@ Aplicación principal del Software Radar - Versión Responsiva.
 Esta versión se adapta automáticamente a cualquier resolución de pantalla.
 """
 import os
+import sys
 import customtkinter as ctk
 from PIL import Image
 import tkinter as tk
@@ -15,11 +16,31 @@ logger = logging.getLogger(__name__)
 # Importar módulos legacy
 from ComSerial import comunicacion
 
-# Importar assets
-carpeta_principal = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-carpeta_imagenes = os.path.join(carpeta_principal, "assets", "images")
+
+def get_resource_path(relative_path):
+    """
+    Obtiene la ruta absoluta a un recurso.
+    Funciona tanto en desarrollo como cuando está empaquetado con PyInstaller.
+    """
+    try:
+        # PyInstaller crea una carpeta temporal y almacena la ruta en _MEIPASS
+        base_path = sys._MEIPASS
+        logger.debug(f"Ejecutando como ejecutable empaquetado: {base_path}")
+    except AttributeError:
+        # Desarrollo normal
+        base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        logger.debug(f"Ejecutando en modo desarrollo: {base_path}")
+    
+    return os.path.join(base_path, relative_path)
+
+
+# Importar assets con soporte para ejecutable empaquetado
+carpeta_imagenes = get_resource_path("assets/images")
 if not os.path.exists(carpeta_imagenes):
-    carpeta_imagenes = os.path.join(carpeta_principal, "imagenes")
+    carpeta_imagenes = get_resource_path("imagenes")
+    logger.debug(f"Usando carpeta imagenes: {carpeta_imagenes}")
+else:
+    logger.debug(f"Usando carpeta assets/images: {carpeta_imagenes}")
 
 
 class ResponsiveRadarApp:

@@ -1,4 +1,5 @@
 import os
+import sys
 from PIL import Image, ImageTk
 import customtkinter as ctk
 from tkinter import ttk, messagebox
@@ -22,8 +23,26 @@ from PIL import Image, ImageTk, ImageDraw
 import io
 import CargaSensor as CS
 
-carpeta_principal = os.path.dirname(__file__)
-carpeta_imagenes = os.path.join(carpeta_principal, "imagenes")
+
+def get_resource_path(relative_path):
+    """
+    Obtiene la ruta absoluta a un recurso.
+    Funciona tanto en desarrollo como cuando está empaquetado con PyInstaller.
+    """
+    try:
+        # PyInstaller crea una carpeta temporal y almacena la ruta en _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # Desarrollo normal
+        base_path = os.path.dirname(__file__)
+    
+    return os.path.join(base_path, relative_path)
+
+
+carpeta_principal = get_resource_path("")
+carpeta_imagenes = get_resource_path("imagenes")
+if not os.path.exists(carpeta_imagenes):
+    carpeta_imagenes = get_resource_path("assets/images")
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
