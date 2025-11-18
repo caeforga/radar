@@ -791,18 +791,29 @@ class ResponsiveControlPanel:
             self.datos_arduino.enviar_datos("M" + str(dato2) + "," + str(dato1))
             
             try:
+                # Guardar ángulos de vista
                 elev = self.ax.elev
                 azim = self.ax.azim
+                
+                # CORRECCIÓN: Destruir el canvas anterior antes de crear uno nuevo
+                if hasattr(self.frameGG, 'canvas'):
+                    self.frameGG.canvas.get_tk_widget().destroy()
+                
+                # Cerrar la figura anterior
                 plt.close(self.fig)
                 
+                # Crear nueva figura con el robot actualizado
                 self.robot.plot([np.deg2rad(dato1num), np.deg2rad(dato2num)],
                               limits=[-0.5, 0.5, -0.5, 0.5, 0, 0.8])
                 self.fig = plt.gcf()
                 self.ax = plt.gca()
                 
+                # Crear nuevo canvas
                 self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
                 self.ax.plot([0, 1], [0, 0], [0, 0])
                 self.ax.view_init(elev=elev, azim=azim)
+                
+                # Empaquetar el nuevo canvas
                 self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
                 self.frameGG.canvas.draw()
             except Exception as e:
