@@ -305,6 +305,10 @@ class ResponsiveRadarApp:
         """Muestra el panel de control responsivo."""
         logger.info("Mostrando panel de control responsivo")
         
+        # CORRECCIÓN: Detener ciclo de actualización del panel de visualización
+        if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
+            self.objeto_visualizacion.detener()
+        
         # Importar panel de control responsivo
         if self.objeto_control is None:
             try:
@@ -326,10 +330,17 @@ class ResponsiveRadarApp:
                     )
                     return
         
-        # Mostrar panel
+        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
         if self.current_panel:
             try:
                 self.current_panel.grid_forget()
+            except:
+                pass
+        
+        # Limpiar cualquier widget residual en el contenedor
+        for widget in self.container.winfo_children():
+            try:
+                widget.grid_forget()
             except:
                 pass
         
@@ -382,15 +393,27 @@ class ResponsiveRadarApp:
                     )
                     return
         
-        # Mostrar panel
+        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
         if self.current_panel:
             try:
                 self.current_panel.grid_forget()
             except:
                 pass
         
+        # Limpiar cualquier widget residual en el contenedor
+        for widget in self.container.winfo_children():
+            try:
+                widget.grid_forget()
+            except:
+                pass
+        
         self.objeto_visualizacion.principal.grid(row=0, column=0, sticky="nsew")
         self.current_panel = self.objeto_visualizacion.principal
+        
+        # CORRECCIÓN: Reiniciar ciclo de actualización al mostrar el panel
+        # (el método iniciar() ahora previene duplicados automáticamente)
+        if hasattr(self.objeto_visualizacion, 'iniciar'):
+            self.objeto_visualizacion.iniciar()
         
         # Destacar botón activo
         self._highlight_active_button(self.btn_visualizacion)

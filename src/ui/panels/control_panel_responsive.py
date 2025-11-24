@@ -37,7 +37,7 @@ class ResponsiveControlPanel:
         
         # Frame principal RESPONSIVO
         self.principal = ctk.CTkFrame(self.contenedor, fg_color="#242424")
-        self.principal.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        # NOTA: NO hacemos grid aquí, se hace desde app_responsive.py
         
         # Configurar grid para responsividad
         self.principal.grid_rowconfigure(0, weight=2)  # Área superior (robot + serial)

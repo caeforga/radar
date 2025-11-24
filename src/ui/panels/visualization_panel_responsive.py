@@ -43,12 +43,12 @@ class ResponsiveVisualizationPanel:
         
         # Frame principal RESPONSIVO
         self.principal = ctk.CTkFrame(self.contenedor, fg_color="#242424")
-        self.principal.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        # NOTA: NO hacemos grid aquí, se hace desde app_responsive.py
         
         # Configurar grid para responsividad
         self.principal.grid_rowconfigure(0, weight=1)
-        self.principal.grid_columnconfigure(0, weight=1)  # Indicadores
-        self.principal.grid_columnconfigure(1, weight=3)  # Gráfico (3x más espacio)
+        self.principal.grid_columnconfigure(0, weight=0, minsize=280)  # Indicadores (ancho fijo mínimo)
+        self.principal.grid_columnconfigure(1, weight=1)  # Gráfico (ocupa el resto del espacio)
         
         # ========== PANEL IZQUIERDO: INDICADORES ==========
         self._create_indicators_panel()
@@ -64,11 +64,16 @@ class ResponsiveVisualizationPanel:
         self.gps1 = None
         self.gps2 = None
         self.compass = None
+        
+        # Variables de control de actualización
+        self._update_id = None  # ID del timer de actualización
+        self._update_running = False  # Flag para controlar el ciclo
     
     def _create_indicators_panel(self):
         """Crea el panel izquierdo con todos los indicadores."""
-        self.frameIndicadores = ctk.CTkScrollableFrame(self.principal, width=250)
-        self.frameIndicadores.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        # CORRECCIÓN: Sin ancho fijo para evitar sobreposición
+        self.frameIndicadores = ctk.CTkScrollableFrame(self.principal)
+        self.frameIndicadores.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="nsew")
         
         # Configurar grid interno
         self.frameIndicadores.grid_columnconfigure(0, weight=1)
@@ -433,7 +438,7 @@ class ResponsiveVisualizationPanel:
         """Crea el panel derecho con el gráfico del radar."""
         # Frame para el gráfico
         self.frame_grafico = ctk.CTkFrame(self.principal, fg_color="#1a1a1a")
-        self.frame_grafico.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        self.frame_grafico.grid(row=0, column=1, padx=(5, 10), pady=10, sticky="nsew")
         
         # Configurar grid para que el canvas ocupe todo el espacio
         self.frame_grafico.grid_rowconfigure(0, weight=1)
@@ -569,8 +574,14 @@ class ResponsiveVisualizationPanel:
     
     def iniciar(self):
         """Inicia el ciclo de actualización automática."""
+        # CORRECCIÓN: Prevenir múltiples ciclos de actualización
+        if self._update_running:
+            logger.warning("Ciclo de actualización ya está corriendo")
+            return
+        
         logger.info("Iniciando ciclo de actualización del panel de visualización")
-        self.root.after(1000, self.actualizar)
+        self._update_running = True
+        self._update_id = self.root.after(1000, self.actualizar)
     
     def actualizar(self):
         """Actualiza todos los componentes del panel con nueva información."""
@@ -743,8 +754,23 @@ class ResponsiveVisualizationPanel:
         except Exception as e:
             logger.error(f"Error durante actualización: {e}", exc_info=True)
         
-        # Programar próxima actualización
-        self.root.after(1000, self.actualizar)
+        # Programar próxima actualización solo si el ciclo está activo
+        if self._update_running:
+            self._update_id = self.root.after(1000, self.actualizar)
+    
+    def detener(self):
+        """Detiene el ciclo de actualización automática."""
+        logger.info("Deteniendo ciclo de actualización del panel de visualización")
+        self._update_running = False
+        
+        # Cancelar el timer pendiente si existe
+        if self._update_id is not None:
+            try:
+                self.root.after_cancel(self._update_id)
+                self._update_id = None
+                logger.info("Timer de actualización cancelado exitosamente")
+            except Exception as e:
+                logger.warning(f"Error al cancelar timer: {e}")
     
     def nueva_lectura(self):
         """Lee nuevos datos en un hilo separado."""
