@@ -66,6 +66,7 @@ class ResponsiveRadarApp:
         self.current_panel = None
         self.objeto_control = None
         self.objeto_visualizacion = None
+        self.objeto_mapa = None
         self.serial = comunicacion()
         
         # Configurar ventana responsiva
@@ -208,6 +209,21 @@ class ResponsiveRadarApp:
         )
         self.btn_visualizacion.grid(row=2, column=0, pady=5, padx=10, sticky="ew")
         
+        # Botón Mapa - Nuevo panel de mapa geográfico
+        self.btn_mapa = ctk.CTkButton(
+            self.menu,
+            text="  🗺️ Mapa",  # Icono de mapa con texto
+            compound="left",
+            anchor="w",
+            font=("Arial", 15, "bold"),
+            height=55,
+            corner_radius=10,
+            fg_color="#2B5278",
+            hover_color="#3D6A91",
+            command=self.show_map_panel
+        )
+        self.btn_mapa.grid(row=3, column=0, pady=5, padx=10, sticky="ew")
+        
         # ==================== INFO DE CONEXIÓN ====================
         self.connection_frame = ctk.CTkFrame(
             self.menu,
@@ -305,9 +321,11 @@ class ResponsiveRadarApp:
         """Muestra el panel de control responsivo."""
         logger.info("Mostrando panel de control responsivo")
         
-        # CORRECCIÓN: Detener ciclo de actualización del panel de visualización
+        # CORRECCIÓN: Detener ciclos de actualización de otros paneles
         if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
             self.objeto_visualizacion.detener()
+        if self.objeto_mapa is not None and hasattr(self.objeto_mapa, 'detener'):
+            self.objeto_mapa.detener()
         
         # Importar panel de control responsivo
         if self.objeto_control is None:
@@ -361,6 +379,10 @@ class ResponsiveRadarApp:
                 "Establezca primero la comunicación serial desde el panel de Control"
             )
             return
+        
+        # Detener ciclo de actualización del mapa si está activo
+        if self.objeto_mapa is not None and hasattr(self.objeto_mapa, 'detener'):
+            self.objeto_mapa.detener()
         
         # Importar panel de visualización responsivo
         if self.objeto_visualizacion is None:
@@ -418,11 +440,71 @@ class ResponsiveRadarApp:
         # Destacar botón activo
         self._highlight_active_button(self.btn_visualizacion)
     
+    def show_map_panel(self):
+        """Muestra el panel de mapa geográfico responsivo."""
+        logger.info("Mostrando panel de mapa geográfico")
+        
+        # Verificar conexión serial
+        if not self.serial.status:
+            messagebox.showerror(
+                "Sin comunicación serial",
+                "Establezca primero la comunicación serial desde el panel de Control"
+            )
+            return
+        
+        # Detener actualización del panel de visualización si está activo
+        if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
+            self.objeto_visualizacion.detener()
+        
+        # Importar panel de mapa responsivo
+        if self.objeto_mapa is None:
+            try:
+                from src.ui.panels import ResponsiveMapPanel
+                self.objeto_mapa = ResponsiveMapPanel(
+                    self.root,
+                    self.container,
+                    self.serial
+                )
+                self.objeto_mapa.iniciar()
+                logger.info("Panel de mapa responsivo creado")
+            except Exception as e:
+                logger.error(f"Error al crear panel de mapa responsivo: {e}")
+                messagebox.showerror(
+                    "Error",
+                    f"No se pudo cargar el panel de mapa:\n{str(e)}"
+                )
+                return
+        
+        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
+        if self.current_panel:
+            try:
+                self.current_panel.grid_forget()
+            except:
+                pass
+        
+        # Limpiar cualquier widget residual en el contenedor
+        for widget in self.container.winfo_children():
+            try:
+                widget.grid_forget()
+            except:
+                pass
+        
+        self.objeto_mapa.principal.grid(row=0, column=0, sticky="nsew")
+        self.current_panel = self.objeto_mapa.principal
+        
+        # Reiniciar ciclo de actualización al mostrar el panel
+        if hasattr(self.objeto_mapa, 'iniciar'):
+            self.objeto_mapa.iniciar()
+        
+        # Destacar botón activo
+        self._highlight_active_button(self.btn_mapa)
+    
     def _highlight_active_button(self, active_button):
         """Destaca el botón activo."""
         # Restablecer todos los botones
         self.btn_control.configure(fg_color="#2B5278")
         self.btn_visualizacion.configure(fg_color="#2B5278")
+        self.btn_mapa.configure(fg_color="#2B5278")
         
         # Destacar botón activo
         active_button.configure(fg_color="#4A90D9")
