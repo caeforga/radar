@@ -176,6 +176,17 @@ class ResponsiveRadarApp:
         except:
             self.icon_radar = None
             logger.warning("No se pudo cargar icono de radar")
+
+        try:
+            icon_map_img = Image.open(os.path.join(carpeta_imagenes, "radar.png"))
+            self.icon_map = ctk.CTkImage(
+                light_image=icon_map_img,
+                dark_image=icon_map_img,
+                size=icon_size
+            )
+        except:
+            self.icon_map = None
+            logger.warning("No se pudo cargar icono de exploración")
         
         # Botón Control - Diseño mejorado
         self.btn_control = ctk.CTkButton(
@@ -212,7 +223,8 @@ class ResponsiveRadarApp:
         # Botón Mapa - Nuevo panel de mapa geográfico
         self.btn_mapa = ctk.CTkButton(
             self.menu,
-            text="  🗺️ Mapa",  # Icono de mapa con texto
+            text="  Mapa",  # Icono de mapa con texto
+            image=self.icon_map,
             compound="left",
             anchor="w",
             font=("Arial", 15, "bold"),
@@ -444,13 +456,8 @@ class ResponsiveRadarApp:
         """Muestra el panel de mapa geográfico responsivo."""
         logger.info("Mostrando panel de mapa geográfico")
         
-        # Verificar conexión serial
-        if not self.serial.status:
-            messagebox.showerror(
-                "Sin comunicación serial",
-                "Establezca primero la comunicación serial desde el panel de Control"
-            )
-            return
+        # Nota: No se requiere conexión serial para el panel de mapa
+        # Se puede usar el MODO DEMO para pruebas sin radar conectado
         
         # Detener actualización del panel de visualización si está activo
         if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
@@ -465,7 +472,7 @@ class ResponsiveRadarApp:
                     self.container,
                     self.serial
                 )
-                self.objeto_mapa.iniciar()
+                # No iniciar automáticamente, el usuario decide si usa DEMO o conexión real
                 logger.info("Panel de mapa responsivo creado")
             except Exception as e:
                 logger.error(f"Error al crear panel de mapa responsivo: {e}")
@@ -492,9 +499,12 @@ class ResponsiveRadarApp:
         self.objeto_mapa.principal.grid(row=0, column=0, sticky="nsew")
         self.current_panel = self.objeto_mapa.principal
         
-        # Reiniciar ciclo de actualización al mostrar el panel
-        if hasattr(self.objeto_mapa, 'iniciar'):
+        # Solo iniciar actualización automática si hay conexión serial
+        # De lo contrario, el usuario puede usar el MODO DEMO
+        if self.serial.status and hasattr(self.objeto_mapa, 'iniciar'):
             self.objeto_mapa.iniciar()
+        else:
+            logger.info("Sin conexión serial - Use el botón DEMO para probar")
         
         # Destacar botón activo
         self._highlight_active_button(self.btn_mapa)

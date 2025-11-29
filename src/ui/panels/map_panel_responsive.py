@@ -9,6 +9,11 @@ import tkintermapview
 import threading
 import math
 import logging
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.colors import LinearSegmentedColormap
+from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +55,8 @@ class ResponsiveMapPanel:
         self.principal.grid_columnconfigure(0, weight=1)
         
         # Variables de estado del radar
-        self.latitud = 0.0
-        self.longitud = 0.0
+        self.latitud = 4.7110      # Bogotá, Colombia
+        self.longitud = -74.0721
         self.orientacion = 0
         self.rango = 80  # km
         self.ganancia = 0
@@ -63,9 +68,25 @@ class ResponsiveMapPanel:
         self._update_running = False
         self.lock = threading.Lock()
         
+        # MODO DEMO: Para pruebas sin radar conectado
+        self.demo_mode = False
+        self.demo_angle = 0  # Ángulo de rotación para animación demo
+        
         # Inicializar barrido
         self.barrido_actual = None
-        self.barrido_nuevo = self.barrido_class(self.intp.main())
+        try:
+            self.barrido_nuevo = self.barrido_class(self.intp.main())
+        except:
+            self.barrido_nuevo = None
+            
+        # Inicializar datos de radar vacíos
+        self.radar_data = np.zeros((360, 512))
+        
+        # Crear el colormap
+        self._create_radar_colormap()
+        
+        # Configurar Matplotlib (Off-screen)
+        self._setup_matplotlib()
         
         # Crear el mapa
         self._create_map_panel()
@@ -76,7 +97,98 @@ class ResponsiveMapPanel:
         # Crear la leyenda de colores
         self._create_color_legend()
         
+        # Crear botón de modo demo
+        self._create_demo_button()
+        
         logger.info("Panel de mapa responsivo creado exitosamente")
+
+    def _create_radar_colormap(self):
+        """Crea el colormap personalizado para el radar con transparencia."""
+        # Definir colores RGBA (Red, Green, Blue, Alpha)
+        # El primer color (valor 0) es totalmente transparente
+        colors = [
+            (0, 0, 0, 0),       # 0: Transparente
+            (0, 0.3, 0, 0.8),   # 10: Verde muy oscuro
+            (0, 0.5, 0, 0.9),   # 20: Verde
+            (0, 1, 0, 1),       # 30: Verde brillante
+            (1, 1, 0, 1),       # 40: Amarillo
+            (1, 0.65, 0, 1),    # 50: Naranja
+            (1, 0, 0, 1),       # 60: Rojo
+            (1, 0, 1, 1),       # 70: Magenta
+            (1, 1, 1, 1)        # 80+: Blanco
+        ]
+        self.radar_cmap = LinearSegmentedColormap.from_list('radar', colors, N=256)
+        # Asegurar que valores bajos sean transparentes
+        self.radar_cmap.set_under((0, 0, 0, 0))
+
+    def _setup_matplotlib(self):
+        """Configura la figura de Matplotlib para renderizado off-screen."""
+        # Crear figura de Matplotlib
+        # Tamaño fijo en pulgadas, dpi controla resolución
+        self.fig = plt.figure(figsize=(6, 6), dpi=100, facecolor='none')
+        self.fig.patch.set_alpha(0.0)  # Fondo totalmente transparente
+        self.ax = self.fig.add_subplot(111, projection='polar')
+        
+        # Configurar el plot polar inicial
+        self.ax.set_facecolor('none')
+        self.fig.patch.set_facecolor('none')
+        self.fig.patch.set_alpha(0.0)
+        self.ax.patch.set_alpha(0.0)
+        
+        # Configurar orientación (Norte arriba)
+        self.ax.set_theta_zero_location("N")
+        self.ax.set_theta_direction(-1)  # Sentido horario
+        
+        # Configurar rango (360 grados completos)
+        self.ax.set_thetamin(0)
+        self.ax.set_thetamax(360)
+        
+        # Configurar Grid Polar (Anillos y Ángulos)
+        self.ax.grid(True, color='#00ff00', alpha=0.5, linestyle='-', linewidth=0.8)
+        
+        # Configurar etiquetas de ángulos (Azimut)
+        self.ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], 
+                               color='#00ff00', fontweight='bold', fontsize=9)
+        
+        # Configurar etiquetas de rango (Distancia)
+        self.ax.set_yticklabels([])  # Limpiamos labels por defecto
+        self.ax.tick_params(axis='y', colors='#00ff00', labelsize=8)
+        
+        # Eliminar spines (bordes) innecesarios pero dejar el círculo exterior
+        self.ax.spines['polar'].set_visible(True)
+        self.ax.spines['polar'].set_color('#00ff00')
+        self.ax.spines['polar'].set_linewidth(1)
+        self.ax.spines['polar'].set_alpha(0.5)
+        
+        # Título desactivado en el plot
+        self.ax.set_title("")
+        
+        # Crear el mesh para el mapa de calor
+        theta = np.linspace(0, 2*np.pi, 361)
+        r = np.linspace(0, self.rango, 513)
+        self.theta_grid, self.r_grid = np.meshgrid(theta, r)
+        
+        # Crear el pcolormesh inicial (mapa de calor)
+        self.radar_mesh = self.ax.pcolormesh(
+            self.theta_grid.T, 
+            self.r_grid.T,
+            self.radar_data,
+            cmap=self.radar_cmap,
+            vmin=0,
+            vmax=80,
+            shading='auto',
+            zorder=1,
+            alpha=0.8  # Transparencia del mapa de calor
+        )
+        
+        # Indicador de orientación (línea de barrido)
+        self.heading_line = self.ax.plot(
+            [0, 0], [0, self.rango],
+            color='#00ffff', linewidth=2, zorder=10
+        )[0]
+        
+        # Inicializar canvas Agg
+        self.canvas = FigureCanvasAgg(self.fig)
     
     def _create_map_panel(self):
         """Crea el widget del mapa que ocupa todo el panel."""
@@ -90,23 +202,16 @@ class ResponsiveMapPanel:
         
         # Configurar el mapa
         self.map_widget.set_tile_server(
-            "https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga",
+            "https://mt0.google.com/vt/lyrs=y&hl=es&x={x}&y={y}&z={z}&s=Ga",
             max_zoom=19
-        )  # Satélite de Google
+        )  # Híbrido de Google (lyrs=y) para ver etiquetas
         
-        # Posición inicial (se actualizará con GPS)
-        # Coordenadas de Argentina como default
-        self.map_widget.set_position(-34.6037, -58.3816)
-        self.map_widget.set_zoom(8)
+        # Posición inicial
+        self.map_widget.set_position(self.latitud, self.longitud)
+        self.map_widget.set_zoom(10)
         
-        # Marker del radar
-        self.radar_marker = None
-        
-        # Círculos de rango
-        self.range_circles = []
-        
-        # Polígono del sector del radar
-        self.radar_polygon = None
+        # Marker del radar (Imagen superpuesta)
+        self.radar_overlay_marker = None
         
         logger.info("Mapa inicializado correctamente")
     
@@ -310,166 +415,247 @@ class ResponsiveMapPanel:
             height=5
         ).pack()
     
+    def _create_demo_button(self):
+        """Crea el botón para activar el modo demo."""
+        # Frame para el botón de demo
+        self.demo_frame = ctk.CTkFrame(
+            self.principal,
+            fg_color=("#000000", "#000000"),
+            bg_color="transparent",
+            corner_radius=10
+        )
+        self.demo_frame.place(relx=0.5, rely=0.01, anchor="n")
+        
+        # Botón de modo demo
+        self.btn_demo = ctk.CTkButton(
+            self.demo_frame,
+            text="🎮 Activar Demo",
+            font=('Arial', 12, 'bold'),
+            fg_color="#22c55e",
+            hover_color="#16a34a",
+            height=35,
+            width=150,
+            command=self._toggle_demo_mode
+        )
+        self.btn_demo.pack(padx=10, pady=10)
+        
+        # Label de estado demo
+        self.lbl_demo_status = ctk.CTkLabel(
+            self.demo_frame,
+            text="",
+            font=('Arial', 10),
+            text_color="#fbbf24"
+        )
+        self.lbl_demo_status.pack(padx=10, pady=(0, 5))
+    
+    def _toggle_demo_mode(self):
+        """Activa/desactiva el modo demo."""
+        if self.demo_mode:
+            # Desactivar demo
+            self.demo_mode = False
+            self._update_running = False
+            if self._update_id:
+                self.root.after_cancel(self._update_id)
+                self._update_id = None
+            
+            self.btn_demo.configure(
+                text="🎮 Activar Demo",
+                fg_color="#22c55e",
+                hover_color="#16a34a"
+            )
+            self.lbl_demo_status.configure(text="")
+            
+            # Limpiar radar
+            self.radar_data = np.zeros((360, 512))
+            self._update_radar_overlay()
+            
+            logger.info("Modo demo desactivado")
+        else:
+            # Activar demo
+            self.demo_mode = True
+            self.demo_angle = 0
+            
+            self.btn_demo.configure(
+                text="⏹ Detener Demo",
+                fg_color="#ef4444",
+                hover_color="#dc2626"
+            )
+            self.lbl_demo_status.configure(text="🔴 MODO SIMULACIÓN ACTIVO")
+            
+            # Iniciar actualización demo
+            self._iniciar_demo()
+            
+            logger.info("Modo demo activado")
+    
+    def _iniciar_demo(self):
+        """Inicia el ciclo de actualización del modo demo."""
+        if not self.demo_mode:
+            return
+        
+        self._update_running = True
+        self._actualizar_demo()
+    
+    def _actualizar_demo(self):
+        """Actualiza los datos simulados del modo demo."""
+        import random
+        
+        if not self.demo_mode:
+            return
+        
+        try:
+            # ===== DATOS SIMULADOS =====
+            
+            # Ubicación demo: Bogotá (fija)
+            self.latitud = 4.7110
+            self.longitud = -74.0721
+            
+            # Orientación que rota lentamente (simulando barrido)
+            self.demo_angle = (self.demo_angle + 3) % 360
+            self.orientacion = self.demo_angle
+            
+            # Rango variable
+            self.rango = random.choice([40, 60, 80, 120, 240])
+            
+            # Ganancia aleatoria
+            self.ganancia = random.randint(0, 50)
+            
+            # Alternar aceptación
+            self.aceptacion = random.random() > 0.2  # 80% aceptado
+            
+            # Estado de operación
+            self.operacion = random.choice(["ON", "ON", "ON", "TEST"])  # Mayormente ON
+            
+            # Generar datos de precipitación simulados
+            self._generate_demo_precipitation()
+            
+            # ===== ACTUALIZAR UI =====
+            self._update_overlays()
+            self._update_radar_overlay()
+            
+        except Exception as e:
+            logger.error(f"Error en actualización demo: {e}")
+        
+        # Programar próxima actualización (cada 200ms para animación más fluida)
+        if self.demo_mode and self._update_running:
+            self._update_id = self.root.after(200, self._actualizar_demo)
+    
+    def _generate_demo_precipitation(self):
+        """Genera datos de precipitación simulados para el demo."""
+        import random
+        
+        # Crear celdas de tormenta aleatorias
+        num_storms = random.randint(2, 5)
+        
+        # Limpiar datos anteriores gradualmente (efecto de estela)
+        self.radar_data = self.radar_data * 0.9
+        
+        for _ in range(num_storms):
+            # Posición de la tormenta
+            storm_angle = random.randint(0, 359)
+            storm_range = random.randint(20, int(self.rango * 0.8))
+            
+            # Tamaño e intensidad
+            storm_size_angle = random.randint(10, 40)
+            storm_size_range = random.randint(10, 30)
+            intensity = random.uniform(20, 70)
+            
+            # Dibujar la tormenta (aproximación simple)
+            for da in range(-storm_size_angle//2, storm_size_angle//2):
+                for dr in range(-storm_size_range//2, storm_size_range//2):
+                    a = (storm_angle + da) % 360
+                    r = int(storm_range + dr)
+                    
+                    if 0 <= r < 512:
+                        # Calcular intensidad con gradiente
+                        dist = math.sqrt(da**2 + dr**2)
+                        max_dist = math.sqrt((storm_size_angle/2)**2 + (storm_size_range/2)**2)
+                        falloff = max(0, 1 - dist / max_dist)
+                        
+                        value = intensity * falloff * random.uniform(0.8, 1.2)
+                        self.radar_data[a, r] = max(self.radar_data[a, r], value)
+    
     def _update_radar_overlay(self):
         """Actualiza el overlay visual del radar en el mapa."""
         try:
-            # Limpiar elementos anteriores
-            self._clear_radar_elements()
+            # Actualizar posición del mapa (si cambió)
+            if self.latitud != 0 and self.longitud != 0:
+                self.map_widget.set_position(self.latitud, self.longitud)
             
-            if self.latitud == 0 and self.longitud == 0:
-                return
+            # Actualizar plot de Matplotlib
+            self.ax.set_ylim(0, self.rango)
             
-            # Actualizar posición del mapa
-            self.map_widget.set_position(self.latitud, self.longitud)
+            # Recalcular grid si cambió el rango
+            theta = np.linspace(0, 2*np.pi, 361)
+            r = np.linspace(0, self.rango, 513)
+            self.theta_grid, self.r_grid = np.meshgrid(theta, r)
             
-            # Agregar marker del radar
-            self.radar_marker = self.map_widget.set_marker(
-                self.latitud,
-                self.longitud,
-                text="📡 RADAR",
-                font=('Arial', 10, 'bold'),
-                text_color="white",
-                marker_color_circle="#3b82f6",
-                marker_color_outside="#1e40af"
+            # Actualizar mesh
+            self.radar_mesh.set_array(self.radar_data.ravel())
+            
+            # Forzar redibujado de la malla con las nuevas coordenadas
+            # Es más eficiente borrar y crear nuevo mesh si cambian las dimensiones, 
+            # pero set_array es más rápido para solo datos. 
+            # Si rango cambia, necesitamos reconfigurar.
+            
+            # Simplificación: recrear mesh si rango cambia
+            self.radar_mesh.remove()
+            self.radar_mesh = self.ax.pcolormesh(
+                self.theta_grid.T, 
+                self.r_grid.T,
+                self.radar_data,
+                cmap=self.radar_cmap,
+                vmin=0,
+                vmax=80,
+                shading='auto',
+                zorder=1,
+                alpha=0.8
             )
             
-            # Dibujar círculos de rango
-            self._draw_range_circles()
+            # Actualizar línea de orientación
+            heading_rad = np.deg2rad(self.orientacion)
+            self.heading_line.set_data([heading_rad, heading_rad], [0, self.rango])
             
-            # Dibujar sector del radar (cono de cobertura)
-            self._draw_radar_sector()
+            # Actualizar anillos de rango (grid polar)
+            # Calcular divisiones de rango
+            if self.rango <= 40:
+                step = 10
+            elif self.rango <= 80:
+                step = 20
+            elif self.rango <= 120:
+                step = 25
+            else:
+                step = 50
+            
+            rings = np.arange(step, self.rango + step, step)
+            self.ax.set_rgrids(rings, labels=[f'{int(r)}' for r in rings], 
+                              angle=45, color='#00ff00', fontsize=8, fontweight='bold')
+            
+            # Renderizar a imagen
+            self.canvas.draw()
+            rgba_buffer = self.canvas.buffer_rgba()
+            width, height = self.fig.get_size_inches() * self.fig.get_dpi()
+            image = Image.frombuffer("RGBA", (int(width), int(height)), rgba_buffer, "raw", "RGBA", 0, 1)
+            
+            # Convertir a PhotoImage para Tkinter
+            radar_image_tk = ImageTk.PhotoImage(image)
+            
+            # Actualizar el marcador en el mapa
+            if self.radar_overlay_marker:
+                self.radar_overlay_marker.delete()
+            
+            # Usar un marcador personalizado con la imagen del radar
+            self.radar_overlay_marker = self.map_widget.set_marker(
+                self.latitud,
+                self.longitud,
+                icon=radar_image_tk,
+                text="" # Sin texto
+            )
+            
+            # Mantener referencia para evitar Garbage Collection
+            self.radar_image_ref = radar_image_tk
             
         except Exception as e:
             logger.error(f"Error al actualizar overlay del radar: {e}")
-    
-    def _clear_radar_elements(self):
-        """Limpia los elementos del radar del mapa."""
-        try:
-            # Eliminar marker
-            if self.radar_marker:
-                self.radar_marker.delete()
-                self.radar_marker = None
-            
-            # Eliminar círculos de rango
-            for circle in self.range_circles:
-                try:
-                    circle.delete()
-                except:
-                    pass
-            self.range_circles = []
-            
-            # Eliminar polígono del sector
-            if self.radar_polygon:
-                try:
-                    self.radar_polygon.delete()
-                except:
-                    pass
-                self.radar_polygon = None
-                
-        except Exception as e:
-            logger.debug(f"Error al limpiar elementos: {e}")
-    
-    def _draw_range_circles(self):
-        """Dibuja círculos de rango alrededor del radar."""
-        try:
-            # Dibujar círculos a diferentes distancias
-            distances = [25, 50, 75, self.rango]  # km
-            
-            for dist in distances:
-                # Crear círculo usando polígono
-                points = self._calculate_circle_points(
-                    self.latitud,
-                    self.longitud,
-                    dist,
-                    36  # número de puntos
-                )
-                
-                if points:
-                    circle = self.map_widget.set_polygon(
-                        points,
-                        fill_color=None,
-                        outline_color="#3b82f680" if dist != self.rango else "#22c55e80",
-                        border_width=1 if dist != self.rango else 2
-                    )
-                    self.range_circles.append(circle)
-                    
-        except Exception as e:
-            logger.error(f"Error al dibujar círculos de rango: {e}")
-    
-    def _draw_radar_sector(self):
-        """Dibuja el sector de cobertura del radar."""
-        try:
-            # Calcular puntos del sector (90° de apertura centrado en la orientación)
-            apertura = 90  # grados
-            inicio = self.orientacion - apertura / 2
-            fin = self.orientacion + apertura / 2
-            
-            # Puntos del arco
-            points = [(self.latitud, self.longitud)]  # Centro
-            
-            for angle in range(int(inicio), int(fin) + 1, 5):
-                lat, lon = self._calculate_destination(
-                    self.latitud,
-                    self.longitud,
-                    self.rango,
-                    angle
-                )
-                points.append((lat, lon))
-            
-            points.append((self.latitud, self.longitud))  # Volver al centro
-            
-            if len(points) > 2:
-                self.radar_polygon = self.map_widget.set_polygon(
-                    points,
-                    fill_color="#22c55e20",
-                    outline_color="#22c55e80",
-                    border_width=2
-                )
-                
-        except Exception as e:
-            logger.error(f"Error al dibujar sector del radar: {e}")
-    
-    def _calculate_circle_points(self, lat, lon, radius_km, num_points):
-        """Calcula los puntos de un círculo en coordenadas geográficas."""
-        points = []
-        for i in range(num_points):
-            angle = (360 / num_points) * i
-            new_lat, new_lon = self._calculate_destination(lat, lon, radius_km, angle)
-            points.append((new_lat, new_lon))
-        points.append(points[0])  # Cerrar el círculo
-        return points
-    
-    def _calculate_destination(self, lat, lon, distance_km, bearing):
-        """
-        Calcula las coordenadas de destino dado un punto, distancia y dirección.
-        
-        Args:
-            lat: Latitud inicial
-            lon: Longitud inicial
-            distance_km: Distancia en kilómetros
-            bearing: Dirección en grados (0 = Norte)
-        
-        Returns:
-            Tuple (lat, lon) del punto destino
-        """
-        R = 6371  # Radio de la Tierra en km
-        
-        lat1 = math.radians(lat)
-        lon1 = math.radians(lon)
-        bearing_rad = math.radians(bearing)
-        d = distance_km / R
-        
-        lat2 = math.asin(
-            math.sin(lat1) * math.cos(d) +
-            math.cos(lat1) * math.sin(d) * math.cos(bearing_rad)
-        )
-        
-        lon2 = lon1 + math.atan2(
-            math.sin(bearing_rad) * math.sin(d) * math.cos(lat1),
-            math.cos(d) - math.sin(lat1) * math.sin(lat2)
-        )
-        
-        return math.degrees(lat2), math.degrees(lon2)
     
     def _update_overlays(self):
         """Actualiza los textos de los overlays con los datos actuales."""
@@ -481,7 +667,7 @@ class ResponsiveMapPanel:
             
             # Actualizar orientación
             self.lbl_orientation.configure(
-                text=f"🧭 Orientación: {self.orientacion}°"
+                text=f"🧭 Orientación: {self.orientacion:.1f}°"
             )
             
             # Actualizar rango
@@ -568,8 +754,10 @@ class ResponsiveMapPanel:
             if (gps1_data.get("fix_quality") == 0 or 
                 gps1_data.get("satellites_in_use", 0) < 4 or 
                 gps2_data.get("status") == 'V'):
-                self.latitud = 0
-                self.longitud = 0
+                # Mantener últimas coordenadas válidas o usar default si es 0
+                if self.latitud == 0:
+                    self.latitud = 4.7110
+                    self.longitud = -74.0721
             else:
                 self.latitud = float(gps1_data.get("latitude", 0))
                 self.longitud = float(gps1_data.get("longitude", 0))
@@ -593,6 +781,9 @@ class ResponsiveMapPanel:
                     self.operacion = "ON"
                 elif self.barrido_actual.operacion == 4:
                     self.operacion = "TEST"
+                
+                # Convertir datos a radar_data para el display
+                self._convert_sweep_to_radar_data()
             
             # Actualizar interfaz
             self._update_overlays()
@@ -605,6 +796,32 @@ class ResponsiveMapPanel:
         if self._update_running:
             self._update_id = self.root.after(2000, self.actualizar)
     
+    def _convert_sweep_to_radar_data(self):
+        """Convierte los datos del barrido a la matriz de radar."""
+        if not self.barrido_actual or not hasattr(self.barrido_actual, 'radios'):
+            return
+        
+        # Mapeo de valores de eco a dBZ aproximados
+        echo_to_dbz = {
+            0: 0,      # Sin eco
+            1: 20,     # Eco débil
+            2: 40,     # Eco moderado
+            3: 55,     # Eco fuerte
+            4: 70      # Eco muy intenso
+        }
+        
+        try:
+            for angulo, radio in self.barrido_actual.radios.items():
+                # Convertir ángulo (-49 a 49) a índice (0 a 359)
+                # El radar cubre ±49° desde la orientación
+                angle_idx = (self.orientacion + angulo) % 360
+                
+                for i, valor in enumerate(radio.datos):
+                    if i < 512 and valor in echo_to_dbz:
+                        self.radar_data[angle_idx, i] = echo_to_dbz[valor]
+        except Exception as e:
+            logger.error(f"Error convirtiendo datos: {e}")
+
     def detener(self):
         """Detiene el ciclo de actualización automática."""
         logger.info("Deteniendo ciclo de actualización del panel de mapa")
@@ -667,4 +884,3 @@ class ResponsiveMapPanel:
 
 # Alias para compatibilidad
 panel_mapa = ResponsiveMapPanel
-
