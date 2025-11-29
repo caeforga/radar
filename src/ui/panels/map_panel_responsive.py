@@ -60,8 +60,10 @@ class ResponsiveMapPanel:
         self.orientacion = 0
         self.rango = 80  # km
         self.ganancia = 0
+        self.inclinacion = 0.0
         self.aceptacion = False
         self.operacion = "STDBY"
+        self.fallos = []
         
         # Variables de control de actualización
         self._update_id = None
@@ -168,17 +170,20 @@ class ResponsiveMapPanel:
         r = np.linspace(0, self.rango, 513)
         self.theta_grid, self.r_grid = np.meshgrid(theta, r)
         
+        # Usar datos enmascarados para transparencia perfecta
+        masked_data = np.ma.masked_where(self.radar_data <= 5, self.radar_data)
+        
         # Crear el pcolormesh inicial (mapa de calor)
         self.radar_mesh = self.ax.pcolormesh(
             self.theta_grid.T, 
             self.r_grid.T,
-            self.radar_data,
+            masked_data,
             cmap=self.radar_cmap,
             vmin=0,
             vmax=80,
             shading='auto',
             zorder=1,
-            alpha=0.8  # Transparencia del mapa de calor
+            alpha=0.9  # Transparencia del mapa de calor
         )
         
         # Indicador de orientación (línea de barrido)
@@ -216,139 +221,141 @@ class ResponsiveMapPanel:
         logger.info("Mapa inicializado correctamente")
     
     def _create_info_overlays(self):
-        """Crea los overlays de información sobre el mapa."""
-        # ========== OVERLAY SUPERIOR IZQUIERDO: UBICACIÓN ==========
-        self.overlay_location = ctk.CTkFrame(
-            self.principal,
-            fg_color=("#000000", "#000000"),
-            bg_color="transparent",
-            corner_radius=10
-        )
-        self.overlay_location.place(relx=0.01, rely=0.01, anchor="nw")
+        """Crea los overlays de información sobre el mapa con diseño profesional."""
+        # Estilo común para frames de overlay
+        overlay_style = {
+            "fg_color": ("#0f172a", "#0f172a"),  # Fondo oscuro azulado (Slate 900)
+            "bg_color": "transparent",
+            "corner_radius": 10,
+            "border_width": 1,
+            "border_color": "#1e293b"  # Slate 800
+        }
         
-        # Título
+        # ========== OVERLAY SUPERIOR IZQUIERDO: UBICACIÓN Y ESTADO ==========
+        self.overlay_main = ctk.CTkFrame(self.principal, **overlay_style)
+        self.overlay_main.place(relx=0.01, rely=0.01, anchor="nw")
+        
+        # Grid interno
+        self.overlay_main.grid_columnconfigure(0, weight=1)
+        
+        # Título: RADAR STATUS
+        title_frame = ctk.CTkFrame(self.overlay_main, fg_color="transparent")
+        title_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(10, 5))
+        
         ctk.CTkLabel(
-            self.overlay_location,
-            text="📍 UBICACIÓN RADAR",
-            font=('Arial', 14, 'bold'),
-            text_color="#3b82f6"
-        ).pack(padx=15, pady=(10, 5))
+            title_frame,
+            text="🛰 RADAR STATUS",
+            font=('Roboto', 12, 'bold'),
+            text_color="#94a3b8"
+        ).pack(side="left")
         
-        # Coordenadas
-        self.lbl_coords = ctk.CTkLabel(
-            self.overlay_location,
-            text="Lat: 0.00000°  Lon: 0.00000°",
-            font=('Consolas', 12),
-            text_color="white"
+        self.lbl_operation = ctk.CTkLabel(
+            title_frame,
+            text="STDBY",
+            font=('Roboto', 12, 'bold'),
+            text_color="#fbbf24",
+            fg_color="#422006",
+            corner_radius=5,
+            padx=8,
+            pady=2
         )
-        self.lbl_coords.pack(padx=15, pady=2)
+        self.lbl_operation.pack(side="right")
+        
+        # Separador
+        ctk.CTkFrame(self.overlay_main, height=1, fg_color="#334155").grid(row=1, column=0, sticky="ew", padx=15, pady=5)
+        
+        # Coordenadas GPS
+        gps_frame = ctk.CTkFrame(self.overlay_main, fg_color="transparent")
+        gps_frame.grid(row=2, column=0, sticky="ew", padx=15, pady=2)
+        
+        ctk.CTkLabel(gps_frame, text="LAT:", font=('Consolas', 11), text_color="#94a3b8").pack(side="left")
+        self.lbl_lat = ctk.CTkLabel(gps_frame, text="0.0000°", font=('Consolas', 11, 'bold'), text_color="#e2e8f0")
+        self.lbl_lat.pack(side="left", padx=5)
+        
+        ctk.CTkLabel(gps_frame, text="LON:", font=('Consolas', 11), text_color="#94a3b8").pack(side="left", padx=(10, 0))
+        self.lbl_lon = ctk.CTkLabel(gps_frame, text="0.0000°", font=('Consolas', 11, 'bold'), text_color="#e2e8f0")
+        self.lbl_lon.pack(side="left", padx=5)
         
         # Orientación
-        self.lbl_orientation = ctk.CTkLabel(
-            self.overlay_location,
-            text="🧭 Orientación: 0°",
-            font=('Arial', 12),
-            text_color="#22c55e"
-        )
-        self.lbl_orientation.pack(padx=15, pady=(5, 10))
+        hdg_frame = ctk.CTkFrame(self.overlay_main, fg_color="transparent")
+        hdg_frame.grid(row=3, column=0, sticky="ew", padx=15, pady=(2, 10))
         
-        # ========== OVERLAY SUPERIOR DERECHO: PARÁMETROS ==========
-        self.overlay_params = ctk.CTkFrame(
-            self.principal,
-            fg_color=("#000000", "#000000"),
-            bg_color="transparent",
-            corner_radius=10
-        )
-        self.overlay_params.place(relx=0.99, rely=0.01, anchor="ne")
+        ctk.CTkLabel(hdg_frame, text="HDG:", font=('Consolas', 11), text_color="#94a3b8").pack(side="left")
+        self.lbl_heading = ctk.CTkLabel(hdg_frame, text="000°", font=('Consolas', 11, 'bold'), text_color="#38bdf8")
+        self.lbl_heading.pack(side="left", padx=5)
         
-        # Título
-        ctk.CTkLabel(
-            self.overlay_params,
-            text="📊 PARÁMETROS",
-            font=('Arial', 14, 'bold'),
-            text_color="#3b82f6"
-        ).pack(padx=15, pady=(10, 5))
+        # ========== OVERLAY INFERIOR IZQUIERDO: PARÁMETROS ==========
+        self.overlay_params = ctk.CTkFrame(self.principal, **overlay_style)
+        self.overlay_params.place(relx=0.01, rely=0.99, anchor="sw")
         
-        # Rango
-        self.lbl_range = ctk.CTkLabel(
-            self.overlay_params,
-            text="📏 Rango: 80 km",
-            font=('Arial', 12),
-            text_color="white"
-        )
-        self.lbl_range.pack(padx=15, pady=2)
+        # Grid de parámetros (2 columnas)
+        params = [
+            ("RANGO", "80 km", "lbl_range"),
+            ("GANANCIA", "0 dB", "lbl_gain"),
+            ("INCLINACIÓN", "0.0°", "lbl_tilt"),
+            ("SEÑAL", "NO", "lbl_signal")
+        ]
         
-        # Ganancia
-        self.lbl_gain = ctk.CTkLabel(
-            self.overlay_params,
-            text="📶 Ganancia: 0 dB",
-            font=('Arial', 12),
-            text_color="white"
-        )
-        self.lbl_gain.pack(padx=15, pady=2)
+        for i, (label, val, attr_name) in enumerate(params):
+            row = i // 2
+            col = i % 2
+            
+            frame = ctk.CTkFrame(self.overlay_params, fg_color="transparent")
+            frame.grid(row=row, column=col, padx=15, pady=8, sticky="w")
+            
+            ctk.CTkLabel(
+                frame, 
+                text=label, 
+                font=('Roboto', 9, 'bold'), 
+                text_color="#64748b"
+            ).pack(anchor="w")
+            
+            lbl = ctk.CTkLabel(
+                frame, 
+                text=val, 
+                font=('Roboto', 13, 'bold'), 
+                text_color="#f8fafc"
+            )
+            lbl.pack(anchor="w")
+            setattr(self, attr_name, lbl)
+
+        # ========== OVERLAY ESCALA (CENTRO ABAJO) ==========
+        self.overlay_scale = ctk.CTkFrame(self.principal, **overlay_style)
+        self.overlay_scale.place(relx=0.5, rely=0.95, anchor="s")
         
-        # Estado de operación
-        self.lbl_operation = ctk.CTkLabel(
-            self.overlay_params,
-            text="⏸ STDBY",
-            font=('Arial', 12, 'bold'),
-            text_color="#fbbf24"
-        )
-        self.lbl_operation.pack(padx=15, pady=(5, 10))
-        
-        # ========== OVERLAY INFERIOR IZQUIERDO: ACEPTACIÓN ==========
-        self.overlay_status = ctk.CTkFrame(
-            self.principal,
-            fg_color=("#000000", "#000000"),
-            bg_color="transparent",
-            corner_radius=10
-        )
-        self.overlay_status.place(relx=0.01, rely=0.99, anchor="sw")
-        
-        # Estado de aceptación
-        self.lbl_accept = ctk.CTkLabel(
-            self.overlay_status,
-            text="● Sin Aceptación",
-            font=('Arial', 14, 'bold'),
-            text_color="#ef4444"
-        )
-        self.lbl_accept.pack(padx=15, pady=10)
-        
-        # ========== OVERLAY INFERIOR CENTRAL: ESCALA ==========
-        self.overlay_scale = ctk.CTkFrame(
-            self.principal,
-            fg_color=("#000000", "#000000"),
-            bg_color="transparent",
-            corner_radius=10
-        )
-        self.overlay_scale.place(relx=0.5, rely=0.99, anchor="s")
-        
-        # Escala de distancia
         self.lbl_scale = ctk.CTkLabel(
             self.overlay_scale,
-            text="──── 25 km ────",
-            font=('Consolas', 11),
+            text="┠─── 25 km ───┨",
+            font=('Consolas', 11, 'bold'),
             text_color="white"
         )
-        self.lbl_scale.pack(padx=15, pady=8)
+        self.lbl_scale.pack(padx=15, pady=5)
+        
+        # ========== ALERTA DE FALLOS (SOLO VISIBLE SI HAY FALLOS) ==========
+        self.overlay_warning = ctk.CTkFrame(self.principal, fg_color="#450a0a", corner_radius=10, border_color="#ef4444", border_width=1)
+        self.lbl_warning = ctk.CTkLabel(self.overlay_warning, text="", text_color="#fca5a5", font=('Roboto', 12, 'bold'))
+        self.lbl_warning.pack(padx=15, pady=8)
+        # Se posicionará cuando sea necesario
     
     def _create_color_legend(self):
         """Crea la leyenda de colores dBZ."""
-        # Frame de leyenda
+        # Frame de leyenda (Esquina inferior derecha)
         self.overlay_legend = ctk.CTkFrame(
             self.principal,
-            fg_color=("#000000", "#000000"),
+            fg_color=("#0f172a", "#0f172a"),
             bg_color="transparent",
-            corner_radius=10
+            corner_radius=10,
+            border_width=1,
+            border_color="#1e293b"
         )
-        self.overlay_legend.place(relx=0.99, rely=0.5, anchor="e")
+        self.overlay_legend.place(relx=0.99, rely=0.99, anchor="se")
         
         # Título
         ctk.CTkLabel(
             self.overlay_legend,
             text="dBZ",
-            font=('Arial', 11, 'bold'),
-            text_color="white"
+            font=('Roboto', 10, 'bold'),
+            text_color="#94a3b8"
         ).pack(padx=8, pady=(8, 5))
         
         # Escala de colores dBZ (de mayor a menor intensidad)
@@ -382,7 +389,7 @@ class ResponsiveMapPanel:
             ctk.CTkLabel(
                 frame_item,
                 text=value,
-                font=('Arial', 8),
+                font=('Arial', 7, 'bold'),
                 text_color="black" if color in ["#FFFF00", "#FFD700", "#00FF00", "#00FFFF"] else "white"
             ).pack(expand=True)
         
@@ -390,7 +397,7 @@ class ResponsiveMapPanel:
         ctk.CTkFrame(
             self.overlay_legend,
             height=1,
-            fg_color="gray50"
+            fg_color="#334155"
         ).pack(fill="x", padx=5, pady=5)
         
         # Leyenda de tipos de precipitación
@@ -404,8 +411,8 @@ class ResponsiveMapPanel:
             ctk.CTkLabel(
                 self.overlay_legend,
                 text=f"{emoji} {text}",
-                font=('Arial', 9),
-                text_color="white"
+                font=('Roboto', 9),
+                text_color="#e2e8f0"
             ).pack(padx=8, pady=1)
         
         # Padding final
@@ -492,6 +499,12 @@ class ResponsiveMapPanel:
         if not self.demo_mode:
             return
         
+        # Configurar ubicación demo inicial
+        self.latitud = 4.7110
+        self.longitud = -74.0721
+        self.map_widget.set_position(self.latitud, self.longitud)
+        self._update_map_zoom()
+        
         self._update_running = True
         self._actualizar_demo()
     
@@ -513,14 +526,24 @@ class ResponsiveMapPanel:
             self.demo_angle = (self.demo_angle + 3) % 360
             self.orientacion = self.demo_angle
             
-            # Rango variable
-            self.rango = random.choice([40, 60, 80, 120, 240])
+            # Rango fijo para evitar saltos de zoom
+            self.rango = 80
             
-            # Ganancia aleatoria
-            self.ganancia = random.randint(0, 50)
+            # Ganancia aleatoria suave
+            self.ganancia = max(0, min(50, self.ganancia + random.randint(-2, 2)))
             
-            # Alternar aceptación
-            self.aceptacion = random.random() > 0.2  # 80% aceptado
+            # Inclinación aleatoria suave
+            self.inclinacion = max(-2.0, min(10.0, self.inclinacion + random.uniform(-0.5, 0.5)))
+            
+            # Alternar aceptación (menos frecuente)
+            if random.random() < 0.05:
+                self.aceptacion = not self.aceptacion
+                
+            # Simular fallos ocasionales
+            if random.random() < 0.01:
+                self.fallos = [random.choice([5, 6])] # 5: Antena, 6: TX
+            elif random.random() < 0.05:
+                self.fallos = []
             
             # Estado de operación
             self.operacion = random.choice(["ON", "ON", "ON", "TEST"])  # Mayormente ON
@@ -540,46 +563,128 @@ class ResponsiveMapPanel:
             self._update_id = self.root.after(200, self._actualizar_demo)
     
     def _generate_demo_precipitation(self):
-        """Genera datos de precipitación simulados para el demo."""
+        """Genera datos de precipitación simulados para el demo con distribución natural."""
         import random
+        import math
         
-        # Crear celdas de tormenta aleatorias
-        num_storms = random.randint(2, 5)
+        # Inicializar centros de tormenta si no existen
+        if not hasattr(self, 'storm_centers') or self.storm_centers is None:
+            self.storm_centers = []
+            # Crear 3 núcleos de tormenta principales
+            for _ in range(3):
+                self.storm_centers.append({
+                    'angle': random.uniform(0, 360),
+                    'dist': random.uniform(20, 150),
+                    'size_a': random.uniform(15, 40),  # Ancho angular
+                    'size_r': random.uniform(10, 30),  # Ancho radial
+                    'intensity': random.uniform(40, 75),
+                    'drift_a': random.uniform(-0.5, 0.5), # Deriva angular
+                    'drift_r': random.uniform(-0.2, 0.2), # Deriva radial
+                    'pulse': random.uniform(0, 6.28)      # Fase de pulsación
+                })
+
+        # Decaimiento gradual de los datos anteriores (estela)
+        self.radar_data = self.radar_data * 0.85
         
-        # Limpiar datos anteriores gradualmente (efecto de estela)
-        self.radar_data = self.radar_data * 0.9
-        
-        for _ in range(num_storms):
-            # Posición de la tormenta
-            storm_angle = random.randint(0, 359)
-            storm_range = random.randint(20, int(self.rango * 0.8))
+        # Actualizar y dibujar cada núcleo de tormenta
+        for storm in self.storm_centers:
+            # Actualizar posición (movimiento lento)
+            storm['angle'] = (storm['angle'] + storm['drift_a']) % 360
+            storm['dist'] += storm['drift_r']
+            storm['pulse'] += 0.1
             
-            # Tamaño e intensidad
-            storm_size_angle = random.randint(10, 40)
-            storm_size_range = random.randint(10, 30)
-            intensity = random.uniform(20, 70)
+            # Rebote en los bordes de rango
+            if storm['dist'] < 10 or storm['dist'] > self.rango * 0.9:
+                storm['drift_r'] *= -1
             
-            # Dibujar la tormenta (aproximación simple)
-            for da in range(-storm_size_angle//2, storm_size_angle//2):
-                for dr in range(-storm_size_range//2, storm_size_range//2):
-                    a = (storm_angle + da) % 360
-                    r = int(storm_range + dr)
+            # Pulsación de intensidad
+            current_intensity = storm['intensity'] + math.sin(storm['pulse']) * 5
+            
+            # Dibujar el núcleo (distribución gaussiana 2D aproximada)
+            center_a = int(storm['angle'])
+            center_r = int(storm['dist'])
+            width_a = int(storm['size_a'])
+            width_r = int(storm['size_r'])
+            
+            # Iterar solo sobre el área afectada
+            for da in range(-width_a, width_a):
+                for dr in range(-width_r, width_r):
+                    a = (center_a + da) % 360
+                    r = center_r + dr
                     
+                    # Verificar límites del array
                     if 0 <= r < 512:
-                        # Calcular intensidad con gradiente
-                        dist = math.sqrt(da**2 + dr**2)
-                        max_dist = math.sqrt((storm_size_angle/2)**2 + (storm_size_range/2)**2)
-                        falloff = max(0, 1 - dist / max_dist)
+                        # Distancia normalizada al centro del núcleo
+                        # Usamos elipsoide para dar forma natural
+                        dist_norm = math.sqrt((da/width_a)**2 + (dr/width_r)**2)
                         
-                        value = intensity * falloff * random.uniform(0.8, 1.2)
-                        self.radar_data[a, r] = max(self.radar_data[a, r], value)
+                        if dist_norm < 1.0:
+                            # Perfil suave (coseno o gaussiano simple)
+                            factor = (math.cos(dist_norm * math.pi) + 1) / 2
+                            
+                            # Añadir ruido perlin-ish (aleatorio pero consistente)
+                            noise = random.uniform(0.8, 1.1)
+                            
+                            val = current_intensity * factor * noise
+                            
+                            # Solo escribir si es mayor (acumulación de capas)
+                            if val > self.radar_data[a, r]:
+                                self.radar_data[a, r] = val
+                                
+        # Añadir algo de "clutter" o ruido de fondo de baja intensidad
+        # para realismo (ecos de tierra, etc.)
+        for _ in range(50):
+            a = random.randint(0, 359)
+            r = random.randint(5, 100)
+            self.radar_data[a, r] = max(self.radar_data[a, r], random.uniform(5, 15))
     
+    def _update_map_zoom(self):
+        """Actualiza el nivel de zoom del mapa basado en el rango del radar."""
+        try:
+            # Estimar zoom level apropiado según el rango en km
+            # Google Maps Zoom levels aproximados para vista completa:
+            # 40km -> Zoom 10-11
+            # 80km -> Zoom 9-10
+            # 120km -> Zoom 8-9
+            # 240km -> Zoom 7-8
+            
+            if self.rango <= 40:
+                target_zoom = 10
+            elif self.rango <= 80:
+                target_zoom = 9
+            elif self.rango <= 120:
+                target_zoom = 8
+            elif self.rango <= 240:
+                target_zoom = 7
+            else:
+                target_zoom = 6
+            
+            # Solo actualizar si es diferente para evitar redibujados innecesarios
+            if self.map_widget.zoom != target_zoom:
+                self.map_widget.set_zoom(target_zoom)
+        except Exception as e:
+            logger.debug(f"Error actualizando zoom: {e}")
+
     def _update_radar_overlay(self):
         """Actualiza el overlay visual del radar en el mapa."""
         try:
-            # Actualizar posición del mapa (si cambió)
-            if self.latitud != 0 and self.longitud != 0:
-                self.map_widget.set_position(self.latitud, self.longitud)
+            # Actualizar posición del mapa solo si cambió significativamente la ubicación del radar
+            # Esto evita que el mapa "salte" si el usuario lo mueve manualmente y permite 
+            # que se centre automáticamente cuando se obtiene la primera lectura GPS válida.
+            current_lat = self.latitud
+            current_lon = self.longitud
+            last_lat = getattr(self, '_last_lat', None)
+            last_lon = getattr(self, '_last_lon', None)
+            
+            if current_lat != 0 and current_lon != 0:
+                # Si es la primera vez o cambió la ubicación (tolerancia para jitter GPS)
+                if (last_lat is None or last_lon is None or 
+                    abs(current_lat - last_lat) > 0.0001 or 
+                    abs(current_lon - last_lon) > 0.0001):
+                    
+                    self.map_widget.set_position(current_lat, current_lon)
+                    self._last_lat = current_lat
+                    self._last_lon = current_lon
             
             # Actualizar plot de Matplotlib
             self.ax.set_ylim(0, self.rango)
@@ -590,7 +695,8 @@ class ResponsiveMapPanel:
             self.theta_grid, self.r_grid = np.meshgrid(theta, r)
             
             # Actualizar mesh
-            self.radar_mesh.set_array(self.radar_data.ravel())
+            # Usar datos enmascarados para transparencia perfecta en valores bajos
+            masked_data = np.ma.masked_where(self.radar_data <= 5, self.radar_data)
             
             # Forzar redibujado de la malla con las nuevas coordenadas
             # Es más eficiente borrar y crear nuevo mesh si cambian las dimensiones, 
@@ -602,13 +708,13 @@ class ResponsiveMapPanel:
             self.radar_mesh = self.ax.pcolormesh(
                 self.theta_grid.T, 
                 self.r_grid.T,
-                self.radar_data,
+                masked_data,
                 cmap=self.radar_cmap,
                 vmin=0,
                 vmax=80,
                 shading='auto',
                 zorder=1,
-                alpha=0.8
+                alpha=0.9
             )
             
             # Actualizar línea de orientación
@@ -629,6 +735,9 @@ class ResponsiveMapPanel:
             rings = np.arange(step, self.rango + step, step)
             self.ax.set_rgrids(rings, labels=[f'{int(r)}' for r in rings], 
                               angle=45, color='#00ff00', fontsize=8, fontweight='bold')
+            
+            # Actualizar Zoom del mapa basado en rango (Bloqueo de zoom)
+            self._update_map_zoom()
             
             # Renderizar a imagen
             self.canvas.draw()
@@ -660,54 +769,42 @@ class ResponsiveMapPanel:
     def _update_overlays(self):
         """Actualiza los textos de los overlays con los datos actuales."""
         try:
-            # Actualizar coordenadas
-            self.lbl_coords.configure(
-                text=f"Lat: {self.latitud:.5f}°  Lon: {self.longitud:.5f}°"
-            )
+            # Actualizar coordenadas y orientación
+            self.lbl_lat.configure(text=f"{self.latitud:.4f}°")
+            self.lbl_lon.configure(text=f"{self.longitud:.4f}°")
+            self.lbl_heading.configure(text=f"{self.orientacion:03d}°")
             
-            # Actualizar orientación
-            self.lbl_orientation.configure(
-                text=f"🧭 Orientación: {self.orientacion:.1f}°"
-            )
+            # Actualizar parámetros principales
+            self.lbl_range.configure(text=f"{self.rango} km")
+            self.lbl_gain.configure(text=f"{self.ganancia} dB")
+            self.lbl_tilt.configure(text=f"{self.inclinacion:.1f}°")
             
-            # Actualizar rango
-            self.lbl_range.configure(
-                text=f"📏 Rango: {self.rango} km"
-            )
+            # Actualizar estado de operación con colores
+            status_config = {
+                "ON": ("ON", "#22c55e", "#14532d"),      # Verde
+                "TEST": ("TEST", "#f59e0b", "#451a03"),  # Ámbar
+                "STDBY": ("STDBY", "#94a3b8", "#1e293b") # Gris
+            }
             
-            # Actualizar ganancia
-            self.lbl_gain.configure(
-                text=f"📶 Ganancia: {self.ganancia} dB"
-            )
+            text, color, bg = status_config.get(self.operacion, ("Unknown", "white", "black"))
+            self.lbl_operation.configure(text=text, text_color=color, fg_color=bg)
             
-            # Actualizar estado de operación
-            if self.operacion == "ON":
-                self.lbl_operation.configure(
-                    text="▶ ON",
-                    text_color="#22c55e"
-                )
-            elif self.operacion == "TEST":
-                self.lbl_operation.configure(
-                    text="⚠ TEST",
-                    text_color="#f59e0b"
-                )
-            else:
-                self.lbl_operation.configure(
-                    text="⏸ STDBY",
-                    text_color="#fbbf24"
-                )
-            
-            # Actualizar estado de aceptación
+            # Actualizar indicador de señal
             if self.aceptacion:
-                self.lbl_accept.configure(
-                    text="● Aceptado",
-                    text_color="#22c55e"
-                )
+                self.lbl_signal.configure(text="OK", text_color="#22c55e")
             else:
-                self.lbl_accept.configure(
-                    text="● Sin Aceptación",
-                    text_color="#ef4444"
-                )
+                self.lbl_signal.configure(text="NO", text_color="#ef4444")
+            
+            # Actualizar escala visual
+            quarter_range = int(self.rango / 4)
+            self.lbl_scale.configure(text=f"┠─── {quarter_range} km ───┨")
+            
+            # Gestión de alertas de fallo
+            if self.fallos:
+                self.lbl_warning.configure(text=f"⚠ FALLO: {', '.join(map(str, self.fallos))}")
+                self.overlay_warning.place(relx=0.5, rely=0.1, anchor="n")
+            else:
+                self.overlay_warning.place_forget()
                 
         except Exception as e:
             logger.error(f"Error al actualizar overlays: {e}")
@@ -773,6 +870,8 @@ class ResponsiveMapPanel:
                 self.rango = self.barrido_actual.rango
                 self.ganancia = self.barrido_actual.ganancia
                 self.aceptacion = self.barrido_actual.aceptacion == 1
+                self.inclinacion = getattr(self.barrido_actual, 'inclinacion', 0.0)
+                self.fallos = getattr(self.barrido_actual, 'fallos', [])
                 
                 # Determinar modo de operación
                 if self.barrido_actual.operacion == 0:
@@ -870,16 +969,7 @@ class ResponsiveMapPanel:
         """Centra el mapa en la ubicación del radar."""
         if self.latitud != 0 and self.longitud != 0:
             self.map_widget.set_position(self.latitud, self.longitud)
-            # Calcular zoom basado en el rango
-            if self.rango <= 40:
-                zoom = 10
-            elif self.rango <= 80:
-                zoom = 9
-            elif self.rango <= 120:
-                zoom = 8
-            else:
-                zoom = 7
-            self.map_widget.set_zoom(zoom)
+            self._update_map_zoom()
 
 
 # Alias para compatibilidad
