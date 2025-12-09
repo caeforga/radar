@@ -598,32 +598,38 @@ class ResponsiveVisualizationPanel:
             hilo.start()
             
             # Leer datos GPS y brújula
-            self.serial.leer_datos()
-            gps1 = self.serial.datos_recibidos.get()
-            print(f"GPS1: {gps1}")
-            
-            self.serial.leer_datos()
-            gps2 = self.serial.datos_recibidos.get()
-            print(f"GPS2: {gps2}")
-            
-            self.serial.leer_datos()
-            self.compass = self.serial.datos_recibidos.get()
-            print(f"Compass: {self.compass}")
-            
-            self.gps1 = GPS.main(gps1)
-            self.gps2 = GPS.main(gps2)
-            
-            self.serial.arduino.reset_input_buffer()
-            
-            # Procesar coordenadas GPS
-            if (self.gps1.get("fix_quality") == 0 or 
-                self.gps1.get("satellites_in_use") < 4 or 
-                self.gps2.get("status") == 'V'):
+            try:
+                self.serial.leer_datos()
+                gps1 = self.serial.datos_recibidos.get()
+                print(f"GPS1: {gps1}")
+                
+                self.serial.leer_datos()
+                gps2 = self.serial.datos_recibidos.get()
+                print(f"GPS2: {gps2}")
+                
+                self.serial.leer_datos()
+                self.compass = self.serial.datos_recibidos.get()
+                print(f"Compass: {self.compass}")
+                
+                self.gps1 = GPS.main(gps1)
+                self.gps2 = GPS.main(gps2)
+                
+                self.serial.arduino.reset_input_buffer()
+                
+                # Procesar coordenadas GPS
+                if (self.gps1.get("fix_quality") == 0 or 
+                    self.gps1.get("satellites_in_use") < 4 or 
+                    self.gps2.get("status") == 'V'):
+                    self.latitud = 0
+                    self.longitud = 0
+                else:
+                    self.latitud = float(self.gps1.get("latitude"))
+                    self.longitud = float(self.gps1.get("longitude"))
+            except Exception as e:
+                logger.error(f"Error leyendo datos GPS/Brújula: {e}")
                 self.latitud = 0
                 self.longitud = 0
-            else:
-                self.latitud = float(self.gps1.get("latitude"))
-                self.longitud = float(self.gps1.get("longitude"))
+                self.compass = 0
             
             # Actualizar labels de GPS
             self.labelCoordenadas2.configure(
