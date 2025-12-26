@@ -19,7 +19,7 @@ def get_radar_output_path():
         # Ejecutando como script de Python
         base_path = Path(__file__).parent
     
-    return base_path / "output" / "Lecturas RADAR"
+    return base_path / "output"
 
 
 def get_radar_file(filename):
@@ -54,7 +54,7 @@ def main(archivo=None):
     tiempoInicial = time.time()
     
     if archivo is None:
-        archivo = get_radar_file("31_03_2025_2.csv")
+        archivo = get_radar_file("salida.csv")
     
     # Convertir a string si es Path
     archivo = str(archivo)
@@ -183,7 +183,7 @@ def angulos(decoded_bits,tiempo):
 
                 deltaT=tiempos_reales[u+1599]-tiempos_reales[u]
                 
-                if deltaT>0.0015985 and deltaT<0.0015995:
+                if deltaT>0.00159775 and deltaT<0.00160025:
                     print("Trama re valida")
                     current=decoded_bits[u:u+1600]
                     current_processed=[]

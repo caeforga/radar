@@ -9,6 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import logging
+import Captura as cap
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class ResponsiveVisualizationPanel:
             self.grafico_class = grafico
             self.barrido_class = barrido
             self.intp = intp
+            self.cap = cap
         except ImportError as e:
             logger.error(f"Error al importar módulos legacy: {e}")
             raise
@@ -834,7 +836,7 @@ class ResponsiveVisualizationPanel:
     def nueva_lectura(self):
         """Lee nuevos datos en un hilo separado."""
         try:
-            time.sleep(5)
+            self.cap.capturaDatos()
             datos = self.intp.main()
             if datos:
                 with self.lock:
