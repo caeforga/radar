@@ -764,6 +764,10 @@ class grafico:
             )
 
     def actualizar_grafico(self, barrido_nuevo, lat, lon, compass):
+        # Verificar si hay datos disponibles
+        if barrido_nuevo is None:
+            return  # No hay datos para mostrar
+        
         if barrido_nuevo.tipo_vp == 1:
             self.barrido_actual = barrido_nuevo
         

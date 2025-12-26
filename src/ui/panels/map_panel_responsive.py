@@ -76,10 +76,18 @@ class ResponsiveMapPanel:
         
         # Inicializar barrido
         self.barrido_actual = None
+        self.barrido_nuevo = None
         try:
-            self.barrido_nuevo = self.barrido_class(self.intp.main())
-        except:
-            self.barrido_nuevo = None
+            datos_iniciales = self.intp.main()
+            if datos_iniciales:
+                self.barrido_nuevo = self.barrido_class(datos_iniciales)
+                logger.info("Datos iniciales del radar cargados en mapa")
+        except FileNotFoundError as e:
+            logger.warning(f"Archivo de lecturas no encontrado: {e}")
+            logger.info("El mapa funcionará sin datos iniciales (use modo demo)")
+        except Exception as e:
+            logger.warning(f"No se pudieron cargar datos iniciales: {e}")
+            logger.info("El mapa funcionará sin datos iniciales (use modo demo)")
             
         # Inicializar datos de radar vacíos
         self.radar_data = np.zeros((360, 512))
@@ -939,8 +947,12 @@ class ResponsiveMapPanel:
         try:
             import time
             time.sleep(5)
-            with self.lock:
-                self.barrido_nuevo = self.barrido_class(self.intp.main())
+            datos = self.intp.main()
+            if datos:
+                with self.lock:
+                    self.barrido_nuevo = self.barrido_class(datos)
+        except FileNotFoundError as e:
+            logger.warning(f"Archivo de lecturas no encontrado en nueva_lectura del mapa: {e}")
         except Exception as e:
             logger.error(f"Error en nueva_lectura del mapa: {e}")
     

@@ -145,7 +145,7 @@ class ResponsiveControlPanel:
         
         self.slider2 = ctk.CTkSlider(
             slider_v_frame,
-            from_=-60, to=60,
+            from_=0, to=34,
             orientation="vertical",
             state="disabled",
             command=self.actualizar_valor
@@ -544,7 +544,21 @@ class ResponsiveControlPanel:
             messagebox.showinfo("Conexión", "Conectado al puerto serial.")
     
     def desconectar_serial(self):
-        """Desconecta del puerto serial."""
+        """Desconecta del puerto serial con retorno a home primero."""
+        # Deshabilitar botón para evitar múltiples clicks
+        self.bt_desconectar.configure(state='disabled')
+        
+        # Mostrar estado de retorno a home
+        self.label_estado.configure(text="● Volviendo a Home...", text_color="orange")
+        self.root.update()
+        
+        # Enviar comando de retorno a home (0,0)
+        self.datos_arduino.enviar_datos("0,0")
+        
+        # Actualizar sliders visualmente a posición 0
+        self.slider1.set(0)
+        self.slider2.set(0)
+        
         self.entry1.configure(state='normal')
         self.entry1.delete(0, ctk.END)
         self.entry1.insert(0, '0')
@@ -555,24 +569,30 @@ class ResponsiveControlPanel:
         self.entry2.insert(0, '0')
         self.entry2.configure(state='readonly')
         
-        self.slider1.set(0)
-        self.slider2.set(0)
+        # Esperar a que los motores lleguen a home (3 segundos)
+        self.root.after(3000, self._completar_desconexion)
+    
+    def _completar_desconexion(self):
+        """Completa la desconexión después del retorno a home."""
+        # Deshabilitar controles
         self.slider1.configure(state='disabled')
         self.entry1.configure(state='disabled')
         self.slider2.configure(state='disabled')
         self.entry2.configure(state='disabled')
         
+        # Actualizar estado de botones
         self.bt_actualizar.configure(state='normal')
         self.bt_conectar.configure(state='normal')
         self.bt_desconectar.configure(state='disabled')
         self.botonStandby.configure(state='disabled')
         
-        self.datos_arduino.enviar_datos("0,0")
+        # Desconectar del puerto serial
         self.datos_arduino.desconectar()
         self.flagsliders2 = 0
         
+        # Actualizar estado visual
         self.label_estado.configure(text="● Desconectado", text_color="red")
-        messagebox.showinfo("Desconexión", "Desconectado del puerto serial.")
+        messagebox.showinfo("Desconexión", "Motores en posición home.\nDesconectado del puerto serial.")
     
     # ... (Resto de métodos del código original)
     # Los métodos de control (modoStandby, modoTEST, etc.) se copian tal cual

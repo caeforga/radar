@@ -1,10 +1,63 @@
 import numpy as np
 import csv
 import time
+import sys
+from pathlib import Path
 
-def main():
-    tiempoInicial=time.time()
-    archivo="output/Lecturas RADAR/31_03_2025_2.csv"
+
+def get_radar_output_path():
+    """
+    Obtiene la ruta de la carpeta de lecturas del radar.
+    
+    - En desarrollo: usa la carpeta del proyecto
+    - En ejecutable: usa la carpeta junto al .exe
+    """
+    if getattr(sys, 'frozen', False):
+        # Ejecutando como ejecutable empaquetado
+        base_path = Path(sys.executable).parent
+    else:
+        # Ejecutando como script de Python
+        base_path = Path(__file__).parent
+    
+    return base_path / "output" / "Lecturas RADAR"
+
+
+def get_radar_file(filename):
+    """
+    Obtiene la ruta completa de un archivo de lecturas del radar.
+    
+    Args:
+        filename: Nombre del archivo (ej: '31_03_2025_2.csv')
+    
+    Returns:
+        Path completo al archivo
+    """
+    output_dir = get_radar_output_path()
+    
+    # Crear directorio si no existe
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    return output_dir / filename
+
+
+def main(archivo=None):
+    """
+    Función principal de interpretación de datos del radar.
+    
+    Args:
+        archivo: Ruta al archivo CSV (opcional). Si no se proporciona,
+                 usa el archivo por defecto.
+    
+    Returns:
+        Lista de ángulos procesados
+    """
+    tiempoInicial = time.time()
+    
+    if archivo is None:
+        archivo = get_radar_file("31_03_2025_2.csv")
+    
+    # Convertir a string si es Path
+    archivo = str(archivo)
     
     tiempo, niveles = carga_archivo(archivo)
     
@@ -14,7 +67,7 @@ def main():
     
     #decoded_bits=decodificacion(tiempo, niveles, periodo, tolerancia)
     
-    angles=angulos(niveles,tiempo)
+    angles = angulos(niveles, tiempo)
     print('Tiempo de ejecucion de la interpretacion: ' + str(time.time()-tiempoInicial))
     return angles
 

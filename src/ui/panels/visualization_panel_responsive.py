@@ -58,8 +58,21 @@ class ResponsiveVisualizationPanel:
         
         # Inicializar variables
         self.barrido_actual = None
-        self.barrido_nuevo = self.barrido_class(self.intp.main())
+        self.barrido_nuevo = None
         self.lock = threading.Lock()
+        
+        # Intentar cargar datos iniciales del radar
+        try:
+            datos_iniciales = self.intp.main()
+            if datos_iniciales:
+                self.barrido_nuevo = self.barrido_class(datos_iniciales)
+                logger.info("Datos iniciales del radar cargados correctamente")
+        except FileNotFoundError as e:
+            logger.warning(f"Archivo de lecturas no encontrado: {e}")
+            logger.info("El panel funcionará sin datos iniciales (esperando conexión al radar)")
+        except Exception as e:
+            logger.warning(f"No se pudieron cargar datos iniciales: {e}")
+            logger.info("El panel funcionará sin datos iniciales (esperando conexión al radar)")
         
         self.gps1 = None
         self.gps2 = None
@@ -649,6 +662,46 @@ class ResponsiveVisualizationPanel:
             # Guardar imágenes (opcional, comentado por rendimiento)
             # self.grafico.fig.savefig('radar.png', transparent=True)
             
+            # Verificar si hay datos del radar disponibles
+            if self.barrido_actual is None:
+                # No hay datos - mostrar estado "sin datos"
+                self.l_aceptacion.configure(
+                    text="● Sin Datos",
+                    text_color="orange"
+                )
+                self.l_STDBY.configure(text_color="gray")
+                self.l_ON.configure(text_color="gray")
+                self.l_TEST.configure(text_color="gray")
+                
+                # Limpiar campos de información
+                self.campoFallos.configure(state="normal")
+                self.campoFallos.delete("0.0", "end")
+                self.campoFallos.insert("end", "Sin conexión al radar")
+                self.campoFallos.configure(state="disabled")
+                
+                self.campoAnuncio.configure(state="normal")
+                self.campoAnuncio.delete("0.0", "end")
+                self.campoAnuncio.insert("end", "Esperando datos...")
+                self.campoAnuncio.configure(state="disabled")
+                
+                # Valores por defecto en parámetros
+                for campo, valor in [
+                    (self.campoGanancia, "-- dB"),
+                    (self.campoRango, "-- km"),
+                    (self.campoInclinacion, "--°"),
+                    (self.campoTrack, "--°"),
+                    (self.campoPV, "--")
+                ]:
+                    campo.configure(state="normal")
+                    campo.delete(0, "end")
+                    campo.insert(0, valor)
+                    campo.configure(state="readonly")
+                
+                # Programar siguiente actualización y salir
+                if self._update_running:
+                    self._update_id = self.root.after(1000, self.actualizar)
+                return
+            
             # Actualizar indicador de aceptación
             if self.barrido_actual.aceptacion == 1:
                 self.l_aceptacion.configure(
@@ -782,8 +835,12 @@ class ResponsiveVisualizationPanel:
         """Lee nuevos datos en un hilo separado."""
         try:
             time.sleep(5)
-            with self.lock:
-                self.barrido_nuevo = self.barrido_class(self.intp.main())
+            datos = self.intp.main()
+            if datos:
+                with self.lock:
+                    self.barrido_nuevo = self.barrido_class(datos)
+        except FileNotFoundError as e:
+            logger.warning(f"Archivo de lecturas no encontrado en nueva_lectura: {e}")
         except Exception as e:
             logger.error(f"Error en nueva_lectura: {e}")
 
