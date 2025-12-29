@@ -9,6 +9,8 @@ import tkintermapview
 import threading
 import math
 import logging
+import urllib.request
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -16,6 +18,35 @@ from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
+
+
+def obtener_ubicacion_pc():
+    """
+    Obtiene la ubicación del PC usando servicios de geolocalización por IP.
+    
+    Returns:
+        tuple: (latitud, longitud) o (0, 0) si falla
+    """
+    apis = [
+        ("http://ip-api.com/json/", lambda d: (d.get("lat", 0), d.get("lon", 0))),
+        ("https://ipapi.co/json/", lambda d: (d.get("latitude", 0), d.get("longitude", 0))),
+        ("https://ipinfo.io/json", lambda d: tuple(map(float, d.get("loc", "0,0").split(",")))),
+    ]
+    
+    for url, parser in apis:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                lat, lon = parser(data)
+                if lat != 0 or lon != 0:
+                    logger.info(f"Ubicación del PC obtenida: {lat}, {lon}")
+                    return float(lat), float(lon)
+        except Exception as e:
+            logger.debug(f"Error con API {url}: {e}")
+            continue
+    
+    logger.warning("No se pudo obtener la ubicación del PC")
+    return 0, 0
 
 
 class ResponsiveMapPanel:
@@ -55,7 +86,7 @@ class ResponsiveMapPanel:
         self.principal.grid_columnconfigure(0, weight=1)
         
         # Variables de estado del radar
-        self.latitud = 4.7110      # Bogotá, Colombia
+        self.latitud = 4.7110      # Bogotá, Colombia (default)
         self.longitud = -74.0721
         self.orientacion = 0
         self.rango = 80  # km
@@ -69,6 +100,26 @@ class ResponsiveMapPanel:
         self._update_id = None
         self._update_running = False
         self.lock = threading.Lock()
+        
+        # Obtener ubicación del PC al iniciar (en un hilo para no bloquear)
+        self._ubicacion_pc_obtenida = False
+        threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
+    
+    def _obtener_ubicacion_pc(self):
+        """Obtiene la ubicación del PC en segundo plano usando geolocalización por IP."""
+        try:
+            lat, lon = obtener_ubicacion_pc()
+            if lat != 0 or lon != 0:
+                self.latitud = lat
+                self.longitud = lon
+                self._ubicacion_pc_obtenida = True
+                logger.info(f"Ubicación del PC establecida para el mapa: {lat}, {lon}")
+                
+                # Actualizar posición del mapa si ya está creado
+                if hasattr(self, 'map_widget'):
+                    self.root.after(0, lambda: self.map_widget.set_position(lat, lon))
+        except Exception as e:
+            logger.error(f"Error obteniendo ubicación del PC: {e}")
         
         # MODO DEMO: Para pruebas sin radar conectado
         self.demo_mode = False
@@ -507,9 +558,11 @@ class ResponsiveMapPanel:
         if not self.demo_mode:
             return
         
-        # Configurar ubicación demo inicial
-        self.latitud = 4.7110
-        self.longitud = -74.0721
+        # Usar ubicación del PC si está disponible, si no usar Bogotá como default
+        if not self._ubicacion_pc_obtenida:
+            # Intentar obtener ubicación del PC
+            threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
+        
         self.map_widget.set_position(self.latitud, self.longitud)
         self._update_map_zoom()
         
@@ -526,9 +579,8 @@ class ResponsiveMapPanel:
         try:
             # ===== DATOS SIMULADOS =====
             
-            # Ubicación demo: Bogotá (fija)
-            self.latitud = 4.7110
-            self.longitud = -74.0721
+            # Ubicación: Usar ubicación del PC (ya establecida)
+            # No sobrescribimos latitud/longitud para mantener la ubicación del PC
             
             # Orientación que rota lentamente (simulando barrido)
             self.demo_angle = (self.demo_angle + 3) % 360
@@ -832,7 +884,6 @@ class ResponsiveMapPanel:
     def actualizar(self):
         """Actualiza todos los componentes del panel con nueva información."""
         import time
-        import GPS
         
         try:
             # Actualizar barrido
@@ -840,38 +891,13 @@ class ResponsiveMapPanel:
             hilo = threading.Thread(target=self.nueva_lectura, daemon=True)
             hilo.start()
             
-            # Leer datos GPS y brújula
-            self.serial.leer_datos()
-            gps1 = self.serial.datos_recibidos.get()
+            # Usar ubicación del PC (ya obtenida al iniciar)
+            # Si aún no se ha obtenido, intentar nuevamente en segundo plano
+            if not self._ubicacion_pc_obtenida:
+                threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
             
-            self.serial.leer_datos()
-            gps2 = self.serial.datos_recibidos.get()
-            
-            self.serial.leer_datos()
-            compass = self.serial.datos_recibidos.get()
-            
-            gps1_data = GPS.main(gps1)
-            gps2_data = GPS.main(gps2)
-            
-            self.serial.arduino.reset_input_buffer()
-            
-            # Procesar coordenadas GPS
-            if (gps1_data.get("fix_quality") == 0 or 
-                gps1_data.get("satellites_in_use", 0) < 4 or 
-                gps2_data.get("status") == 'V'):
-                # Mantener últimas coordenadas válidas o usar default si es 0
-                if self.latitud == 0:
-                    self.latitud = 4.7110
-                    self.longitud = -74.0721
-            else:
-                self.latitud = float(gps1_data.get("latitude", 0))
-                self.longitud = float(gps1_data.get("longitude", 0))
-            
-            # Actualizar orientación
-            try:
-                self.orientacion = int(compass) if compass else 0
-            except:
-                self.orientacion = 0
+            # Orientación fija a 0 (sin brújula del radar)
+            self.orientacion = 0
             
             # Actualizar datos del barrido
             if self.barrido_actual:
