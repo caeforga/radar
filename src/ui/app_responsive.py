@@ -60,7 +60,7 @@ class ResponsiveRadarApp:
         
         # Crear ventana principal
         self.root = ctk.CTk()
-        self.root.title("Software Radar")
+        self.root.title("RADVIS_ART2000")
         
         # Variables de estado
         self.current_panel = None
@@ -137,7 +137,7 @@ class ResponsiveRadarApp:
         
         title = ctk.CTkLabel(
             title_frame,
-            text="R A D A R",
+            text="RADVIS_ART2000",
             font=("Arial Black", 24),
             text_color="white"
         )
@@ -145,7 +145,7 @@ class ResponsiveRadarApp:
         
         subtitle = ctk.CTkLabel(
             title_frame,
-            text="Sistema de Control",
+            text="Radar Data Visualization\nand Control System for ART2000",
             font=("Arial", 10),
             text_color="lightblue"
         )
