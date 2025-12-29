@@ -9,40 +9,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import logging
-import urllib.request
-import json
 import Captura as cap
 
 logger = logging.getLogger(__name__)
-
-
-def obtener_ubicacion_pc():
-    """
-    Obtiene la ubicación del PC usando servicios de geolocalización por IP.
-    
-    Returns:
-        tuple: (latitud, longitud) o (0, 0) si falla
-    """
-    apis = [
-        ("http://ip-api.com/json/", lambda d: (d.get("lat", 0), d.get("lon", 0))),
-        ("https://ipapi.co/json/", lambda d: (d.get("latitude", 0), d.get("longitude", 0))),
-        ("https://ipinfo.io/json", lambda d: tuple(map(float, d.get("loc", "0,0").split(",")))),
-    ]
-    
-    for url, parser in apis:
-        try:
-            with urllib.request.urlopen(url, timeout=5) as response:
-                data = json.loads(response.read().decode())
-                lat, lon = parser(data)
-                if lat != 0 or lon != 0:
-                    logger.info(f"Ubicación del PC obtenida: {lat}, {lon}")
-                    return float(lat), float(lon)
-        except Exception as e:
-            logger.debug(f"Error con API {url}: {e}")
-            continue
-    
-    logger.warning("No se pudo obtener la ubicación del PC")
-    return 0, 0
 
 
 class ResponsiveVisualizationPanel:
@@ -109,30 +78,11 @@ class ResponsiveVisualizationPanel:
         
         self.gps1 = None
         self.gps2 = None
-        self.compass = 0
-        
-        # Obtener ubicación del PC al iniciar (en un hilo para no bloquear)
-        self.latitud = 0
-        self.longitud = 0
-        self._ubicacion_obtenida = False
-        threading.Thread(target=self._obtener_ubicacion_inicial, daemon=True).start()
+        self.compass = None
         
         # Variables de control de actualización
         self._update_id = None  # ID del timer de actualización
         self._update_running = False  # Flag para controlar el ciclo
-    
-    def _obtener_ubicacion_inicial(self):
-        """Obtiene la ubicación del PC en segundo plano."""
-        try:
-            lat, lon = obtener_ubicacion_pc()
-            self.latitud = lat
-            self.longitud = lon
-            self._ubicacion_obtenida = True
-            logger.info(f"Ubicación del PC establecida: {lat}, {lon}")
-        except Exception as e:
-            logger.error(f"Error obteniendo ubicación del PC: {e}")
-            self.latitud = 0
-            self.longitud = 0
     
     def _create_indicators_panel(self):
         """Crea el panel izquierdo con todos los indicadores."""
@@ -651,6 +601,7 @@ class ResponsiveVisualizationPanel:
     def actualizar(self):
         """Actualiza todos los componentes del panel con nueva información."""
         import time
+        import GPS
         import CargaSensor as CS
         
         tinicial = time.time()
@@ -661,19 +612,45 @@ class ResponsiveVisualizationPanel:
             hilo = threading.Thread(target=self.nueva_lectura, daemon=True)
             hilo.start()
             
-            # Usar ubicación del PC (ya obtenida al iniciar)
-            # Si aún no se ha obtenido, intentar nuevamente en segundo plano
-            if not self._ubicacion_obtenida and self.latitud == 0 and self.longitud == 0:
-                threading.Thread(target=self._obtener_ubicacion_inicial, daemon=True).start()
+            # Leer datos GPS y brújula
+            try:
+                self.serial.leer_datos()
+                gps1 = self.serial.datos_recibidos.get()
+                print(f"GPS1: {gps1}")
+                
+                self.serial.leer_datos()
+                gps2 = self.serial.datos_recibidos.get()
+                print(f"GPS2: {gps2}")
+                
+                self.serial.leer_datos()
+                self.compass = self.serial.datos_recibidos.get()
+                print(f"Compass: {self.compass}")
+                
+                self.gps1 = GPS.main(gps1)
+                self.gps2 = GPS.main(gps2)
+                
+                self.serial.arduino.reset_input_buffer()
+                
+                # Procesar coordenadas GPS
+                if (self.gps1.get("fix_quality") == 0 or 
+                    self.gps1.get("satellites_in_use") < 4 or 
+                    self.gps2.get("status") == 'V'):
+                    self.latitud = 0
+                    self.longitud = 0
+                else:
+                    self.latitud = float(self.gps1.get("latitude"))
+                    self.longitud = float(self.gps1.get("longitude"))
+            except Exception as e:
+                logger.error(f"Error leyendo datos GPS/Brújula: {e}")
+                self.latitud = 0
+                self.longitud = 0
+                self.compass = 0
             
-            # Brújula fija a 0 (no hay brújula en el PC)
-            self.compass = 0
-            
-            # Actualizar labels de ubicación
+            # Actualizar labels de GPS
             self.labelCoordenadas2.configure(
                 text=f"{round(self.latitud, 5)}, {round(self.longitud, 5)}"
             )
-            self.labelDir2.configure(text=f"{self.compass}°")
+            self.labelDir2.configure(text=str(self.compass))
             
             # Actualizar gráfico del radar
             self.grafico.actualizar_grafico(
