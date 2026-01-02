@@ -9,9 +9,17 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import logging
-import Captura as cap
 
 logger = logging.getLogger(__name__)
+
+# Import opcional de Captura (requiere saleae)
+try:
+    import Captura as cap
+    CAPTURA_DISPONIBLE = True
+except ImportError:
+    cap = None
+    CAPTURA_DISPONIBLE = False
+    logger.warning("Módulo Captura no disponible (saleae no instalado)")
 
 
 class ResponsiveVisualizationPanel:
@@ -38,7 +46,8 @@ class ResponsiveVisualizationPanel:
             self.grafico_class = grafico
             self.barrido_class = barrido
             self.intp = intp
-            self.cap = cap
+            self.cap = cap  # Puede ser None si saleae no está instalado
+            self.captura_disponible = CAPTURA_DISPONIBLE
         except ImportError as e:
             logger.error(f"Error al importar módulos legacy: {e}")
             raise
@@ -836,7 +845,10 @@ class ResponsiveVisualizationPanel:
     def nueva_lectura(self):
         """Lee nuevos datos en un hilo separado."""
         try:
-            self.cap.capturaDatos()
+            # Solo capturar si el módulo Captura está disponible (requiere saleae)
+            if self.captura_disponible and self.cap is not None:
+                self.cap.capturaDatos()
+            
             datos = self.intp.main()
             if datos:
                 with self.lock:

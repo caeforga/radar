@@ -6,3 +6,5 @@ pyserial
 cartopy
 roboticstoolbox-python
 tkintermapview
+logic2-automation
+

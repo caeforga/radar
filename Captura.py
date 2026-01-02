@@ -20,7 +20,7 @@ def capturaDatos():
         # you can configure in the Logic 2 UI.
         device_configuration = automation.LogicDeviceConfiguration(
             enabled_digital_channels=[0],
-            digital_sample_rate=50_000_000,
+            digital_sample_rate=10_000_000,
             digital_threshold_volts=3.3
         )
 
