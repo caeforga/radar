@@ -101,26 +101,6 @@ class ResponsiveMapPanel:
         self._update_running = False
         self.lock = threading.Lock()
         
-        # Obtener ubicación del PC al iniciar (en un hilo para no bloquear)
-        self._ubicacion_pc_obtenida = False
-        threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
-    
-    def _obtener_ubicacion_pc(self):
-        """Obtiene la ubicación del PC en segundo plano usando geolocalización por IP."""
-        try:
-            lat, lon = obtener_ubicacion_pc()
-            if lat != 0 or lon != 0:
-                self.latitud = lat
-                self.longitud = lon
-                self._ubicacion_pc_obtenida = True
-                logger.info(f"Ubicación del PC establecida para el mapa: {lat}, {lon}")
-                
-                # Actualizar posición del mapa si ya está creado
-                if hasattr(self, 'map_widget'):
-                    self.root.after(0, lambda: self.map_widget.set_position(lat, lon))
-        except Exception as e:
-            logger.error(f"Error obteniendo ubicación del PC: {e}")
-        
         # MODO DEMO: Para pruebas sin radar conectado
         self.demo_mode = False
         self.demo_angle = 0  # Ángulo de rotación para animación demo
@@ -162,6 +142,36 @@ class ResponsiveMapPanel:
         self._create_demo_button()
         
         logger.info("Panel de mapa responsivo creado exitosamente")
+        
+        # Obtener ubicación del PC al iniciar (en un hilo para no bloquear UI)
+        # Esto se hace DESPUÉS de crear todos los widgets
+        self._ubicacion_pc_obtenida = False
+        threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
+    
+    def _obtener_ubicacion_pc(self):
+        """Obtiene la ubicación del PC en segundo plano usando geolocalización por IP."""
+        try:
+            lat, lon = obtener_ubicacion_pc()
+            if lat != 0 or lon != 0:
+                # Usar lock para sincronizar acceso a las coordenadas
+                with self.lock:
+                    self.latitud = lat
+                    self.longitud = lon
+                    self._ubicacion_pc_obtenida = True
+                logger.info(f"Ubicación del PC establecida para el mapa: {lat}, {lon}")
+                
+                # Actualizar posición del mapa en el hilo principal (thread-safe)
+                if hasattr(self, 'map_widget'):
+                    self.root.after(0, lambda: self._actualizar_posicion_mapa(lat, lon))
+        except Exception as e:
+            logger.error(f"Error obteniendo ubicación del PC: {e}")
+    
+    def _actualizar_posicion_mapa(self, lat, lon):
+        """Actualiza la posición del mapa de forma thread-safe."""
+        try:
+            self.map_widget.set_position(lat, lon)
+        except Exception as e:
+            logger.error(f"Error actualizando posición del mapa: {e}")
 
     def _create_radar_colormap(self):
         """Crea el colormap personalizado para el radar con transparencia."""
@@ -563,7 +573,12 @@ class ResponsiveMapPanel:
             # Intentar obtener ubicación del PC
             threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
         
-        self.map_widget.set_position(self.latitud, self.longitud)
+        # Obtener coordenadas de forma thread-safe
+        with self.lock:
+            lat = self.latitud
+            lon = self.longitud
+        
+        self.map_widget.set_position(lat, lon)
         self._update_map_zoom()
         
         self._update_running = True
@@ -728,11 +743,14 @@ class ResponsiveMapPanel:
     def _update_radar_overlay(self):
         """Actualiza el overlay visual del radar en el mapa."""
         try:
+            # Obtener coordenadas de forma thread-safe
+            with self.lock:
+                current_lat = self.latitud
+                current_lon = self.longitud
+            
             # Actualizar posición del mapa solo si cambió significativamente la ubicación del radar
             # Esto evita que el mapa "salte" si el usuario lo mueve manualmente y permite 
             # que se centre automáticamente cuando se obtiene la primera lectura GPS válida.
-            current_lat = self.latitud
-            current_lon = self.longitud
             last_lat = getattr(self, '_last_lat', None)
             last_lon = getattr(self, '_last_lon', None)
             
@@ -813,9 +831,10 @@ class ResponsiveMapPanel:
                 self.radar_overlay_marker.delete()
             
             # Usar un marcador personalizado con la imagen del radar
+            # Usar las coordenadas obtenidas al inicio del método (thread-safe)
             self.radar_overlay_marker = self.map_widget.set_marker(
-                self.latitud,
-                self.longitud,
+                current_lat,
+                current_lon,
                 icon=radar_image_tk,
                 text="" # Sin texto
             )
@@ -829,9 +848,14 @@ class ResponsiveMapPanel:
     def _update_overlays(self):
         """Actualiza los textos de los overlays con los datos actuales."""
         try:
+            # Obtener coordenadas de forma thread-safe
+            with self.lock:
+                lat = self.latitud
+                lon = self.longitud
+            
             # Actualizar coordenadas y orientación
-            self.lbl_lat.configure(text=f"{self.latitud:.4f}°")
-            self.lbl_lon.configure(text=f"{self.longitud:.4f}°")
+            self.lbl_lat.configure(text=f"{lat:.4f}°")
+            self.lbl_lon.configure(text=f"{lon:.4f}°")
             self.lbl_heading.configure(text=f"{self.orientacion:03d}°")
             
             # Actualizar parámetros principales
@@ -1005,8 +1029,13 @@ class ResponsiveMapPanel:
     
     def zoom_to_radar(self):
         """Centra el mapa en la ubicación del radar."""
-        if self.latitud != 0 and self.longitud != 0:
-            self.map_widget.set_position(self.latitud, self.longitud)
+        # Obtener coordenadas de forma thread-safe
+        with self.lock:
+            lat = self.latitud
+            lon = self.longitud
+        
+        if lat != 0 and lon != 0:
+            self.map_widget.set_position(lat, lon)
             self._update_map_zoom()
 
 
