@@ -56,16 +56,22 @@ class ResponsiveVisualizationPanel:
         self.principal = ctk.CTkFrame(self.contenedor, fg_color="#242424")
         # NOTA: NO hacemos grid aquí, se hace desde app_responsive.py
         
-        # Configurar grid para responsividad
+        # Configurar grid para responsividad - Nuevo layout optimizado
+        # Fila 0: Panel principal (indicadores + gráfico) - peso alto
+        # Fila 1: Barra de parámetros inferior - altura fija
         self.principal.grid_rowconfigure(0, weight=1)
-        self.principal.grid_columnconfigure(0, weight=0, minsize=280)  # Indicadores (ancho fijo mínimo)
-        self.principal.grid_columnconfigure(1, weight=1)  # Gráfico (ocupa el resto del espacio)
+        self.principal.grid_rowconfigure(1, weight=0, minsize=100)  # Barra inferior fija
+        self.principal.grid_columnconfigure(0, weight=0, minsize=200)  # Indicadores compactos
+        self.principal.grid_columnconfigure(1, weight=1)  # Gráfico (ocupa el resto)
         
-        # ========== PANEL IZQUIERDO: INDICADORES ==========
+        # ========== PANEL IZQUIERDO: INDICADORES COMPACTOS ==========
         self._create_indicators_panel()
         
         # ========== PANEL DERECHO: GRÁFICO ==========
         self._create_graph_panel()
+        
+        # ========== BARRA INFERIOR: PARÁMETROS CRÍTICOS ==========
+        self._create_bottom_bar()
         
         # Inicializar variables
         self.barrido_actual = None
@@ -94,369 +100,263 @@ class ResponsiveVisualizationPanel:
         self._update_running = False  # Flag para controlar el ciclo
     
     def _create_indicators_panel(self):
-        """Crea el panel izquierdo con todos los indicadores."""
-        # CORRECCIÓN: Sin ancho fijo para evitar sobreposición
-        self.frameIndicadores = ctk.CTkScrollableFrame(self.principal)
+        """Crea el panel izquierdo COMPACTO con indicadores de estado."""
+        # Panel compacto sin scroll para indicadores esenciales
+        self.frameIndicadores = ctk.CTkFrame(self.principal, fg_color="#1a1a1a")
         self.frameIndicadores.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="nsew")
         
         # Configurar grid interno
         self.frameIndicadores.grid_columnconfigure(0, weight=1)
-        self.frameIndicadores.grid_columnconfigure(1, weight=2)
         
         # ========== TÍTULO ==========
         title = ctk.CTkLabel(
             self.frameIndicadores,
-            text="📊 Indicadores",
-            font=('Arial', 18, 'bold'),
+            text="📊 Estado",
+            font=('Arial', 16, 'bold'),
             text_color="#3b82f6"
         )
-        title.grid(row=0, column=0, columnspan=2, pady=(10, 20), sticky="ew")
+        title.grid(row=0, column=0, pady=(10, 10), sticky="ew")
         
         # ========== ACEPTACIÓN ==========
         self.l_aceptacion = ctk.CTkLabel(
             self.frameIndicadores,
             text="● Aceptación",
             text_color="red",
-            font=('Arial', 14, 'bold')
+            font=('Arial', 13, 'bold')
         )
-        self.l_aceptacion.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+        self.l_aceptacion.grid(row=1, column=0, padx=10, pady=8)
         
         # Separador
-        separator1 = ctk.CTkFrame(self.frameIndicadores, height=2, fg_color="gray30")
-        separator1.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        separator1 = ctk.CTkFrame(self.frameIndicadores, height=1, fg_color="gray40")
+        separator1.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
         
-        # ========== MODO DE OPERACIÓN ==========
+        # ========== MODO DE OPERACIÓN (compacto horizontal) ==========
         ctk.CTkLabel(
             self.frameIndicadores,
             text="Operación:",
-            font=('Arial', 13, 'bold')
-        ).grid(row=3, column=0, padx=10, pady=(10, 5), sticky="w")
+            font=('Arial', 11, 'bold')
+        ).grid(row=3, column=0, padx=10, pady=(5, 2), sticky="w")
         
-        self.l_STDBY = ctk.CTkLabel(
-            self.frameIndicadores,
-            text="⏸ STDBY",
-            font=('Arial', 12)
-        )
-        self.l_STDBY.grid(row=4, column=0, columnspan=2, padx=10, pady=5)
+        # Frame para modos en línea
+        frame_modos = ctk.CTkFrame(self.frameIndicadores, fg_color="transparent")
+        frame_modos.grid(row=4, column=0, padx=10, pady=2, sticky="ew")
+        frame_modos.grid_columnconfigure((0, 1, 2), weight=1)
         
-        self.l_TEST = ctk.CTkLabel(
-            self.frameIndicadores,
-            text="⚠ TEST",
-            font=('Arial', 12)
-        )
-        self.l_TEST.grid(row=5, column=0, columnspan=2, padx=10, pady=5)
+        self.l_STDBY = ctk.CTkLabel(frame_modos, text="⏸ STDBY", font=('Arial', 10), text_color="gray")
+        self.l_STDBY.grid(row=0, column=0, padx=2)
         
-        self.l_ON = ctk.CTkLabel(
-            self.frameIndicadores,
-            text="✓ ON",
-            font=('Arial', 12)
-        )
-        self.l_ON.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+        self.l_TEST = ctk.CTkLabel(frame_modos, text="⚠ TEST", font=('Arial', 10), text_color="gray")
+        self.l_TEST.grid(row=0, column=1, padx=2)
+        
+        self.l_ON = ctk.CTkLabel(frame_modos, text="✓ ON", font=('Arial', 10), text_color="gray")
+        self.l_ON.grid(row=0, column=2, padx=2)
         
         # Separador
-        separator2 = ctk.CTkFrame(self.frameIndicadores, height=2, fg_color="gray30")
-        separator2.grid(row=7, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        separator2 = ctk.CTkFrame(self.frameIndicadores, height=1, fg_color="gray40")
+        separator2.grid(row=5, column=0, sticky="ew", padx=10, pady=5)
         
         # ========== FALLOS ==========
         ctk.CTkLabel(
             self.frameIndicadores,
             text="⚠ Fallos",
-            font=('Arial', 13, 'bold')
-        ).grid(row=8, column=0, padx=10, pady=(10, 5), sticky="w")
+            font=('Arial', 11, 'bold')
+        ).grid(row=6, column=0, padx=10, pady=(5, 2), sticky="w")
         
         self.campoFallos = ctk.CTkTextbox(
             self.frameIndicadores,
-            font=('Arial', 11),
-            height=80,
-            wrap="word"
+            font=('Arial', 10),
+            height=50,
+            wrap="word",
+            fg_color="#2a2a2a"
         )
-        self.campoFallos.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
-        self.campoFallos.insert("0.0", "Sin fallos reportados")
+        self.campoFallos.grid(row=7, column=0, padx=10, pady=2, sticky="ew")
+        self.campoFallos.insert("0.0", "Sin fallos")
         self.campoFallos.configure(state="disabled")
         
         # ========== MODO ESPECIAL ==========
         ctk.CTkLabel(
             self.frameIndicadores,
-            text="🔧 Modo especial",
-            font=('Arial', 13, 'bold')
-        ).grid(row=10, column=0, padx=10, pady=(10, 5), sticky="w")
+            text="🔧 Modo Especial",
+            font=('Arial', 11, 'bold')
+        ).grid(row=8, column=0, padx=10, pady=(5, 2), sticky="w")
         
         self.campoAnuncio = ctk.CTkTextbox(
             self.frameIndicadores,
-            font=('Arial', 11),
-            height=80,
-            wrap="word"
+            font=('Arial', 10),
+            height=50,
+            wrap="word",
+            fg_color="#2a2a2a"
         )
-        self.campoAnuncio.grid(row=11, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
-        self.campoAnuncio.insert("0.0", "Modo normal")
+        self.campoAnuncio.grid(row=9, column=0, padx=10, pady=2, sticky="ew")
+        self.campoAnuncio.insert("0.0", "Normal")
         self.campoAnuncio.configure(state="disabled")
         
         # Separador
-        separator3 = ctk.CTkFrame(self.frameIndicadores, height=2, fg_color="gray30")
-        separator3.grid(row=12, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        separator3 = ctk.CTkFrame(self.frameIndicadores, height=1, fg_color="gray40")
+        separator3.grid(row=10, column=0, sticky="ew", padx=10, pady=5)
         
-        # ========== PARÁMETROS ==========
+        # ========== GPS & BRÚJULA (compacto) ==========
         ctk.CTkLabel(
             self.frameIndicadores,
-            text="📏 Parámetros",
-            font=('Arial', 15, 'bold'),
-            text_color="#3b82f6"
-        ).grid(row=13, column=0, columnspan=2, pady=(10, 15))
-        
-        # Rango
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Rango:",
-            font=('Arial', 12, 'bold')
-        ).grid(row=14, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoRango = ctk.CTkEntry(
-            self.frameIndicadores,
-            font=('Arial', 12, 'bold'),
-            justify='center'
-        )
-        self.campoRango.grid(row=14, column=1, padx=10, pady=8, sticky="ew")
-        self.campoRango.insert(0, "80 km")
-        self.campoRango.configure(state="readonly")
-        
-        # Ganancia
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Ganancia:",
-            font=('Arial', 12, 'bold')
-        ).grid(row=15, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoGain = ctk.CTkEntry(
-            self.frameIndicadores,
-            font=('Arial', 12, 'bold'),
-            justify='center'
-        )
-        self.campoGain.grid(row=15, column=1, padx=10, pady=8, sticky="ew")
-        self.campoGain.insert(0, "0 dB")
-        self.campoGain.configure(state="readonly")
-        
-        # Perfil Vertical
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Perfil V.:",
-            font=('Arial', 12, 'bold')
-        ).grid(row=16, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoVp = ctk.CTkEntry(
-            self.frameIndicadores,
-            font=('Arial', 12, 'bold'),
-            justify='center'
-        )
-        self.campoVp.grid(row=16, column=1, padx=10, pady=8, sticky="ew")
-        self.campoVp.insert(0, "OFF")
-        self.campoVp.configure(state="readonly")
-        
-        # Inclinación
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Inclinación:",
-            font=('Arial', 12, 'bold')
-        ).grid(row=17, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoInclinacion = ctk.CTkEntry(
-            self.frameIndicadores,
-            font=('Arial', 12, 'bold'),
-            justify='center'
-        )
-        self.campoInclinacion.grid(row=17, column=1, padx=10, pady=8, sticky="ew")
-        self.campoInclinacion.insert(0, "0°")
-        self.campoInclinacion.configure(state="readonly")
-        
-        # Track
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Track:",
-            font=('Arial', 12, 'bold')
-        ).grid(row=18, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoTrack = ctk.CTkEntry(
-            self.frameIndicadores,
-            font=('Arial', 12, 'bold'),
-            justify='center'
-        )
-        self.campoTrack.grid(row=18, column=1, padx=10, pady=8, sticky="ew")
-        self.campoTrack.insert(0, "0°")
-        self.campoTrack.configure(state="readonly")
-        
-        # Separador
-        separator4 = ctk.CTkFrame(self.frameIndicadores, height=2, fg_color="gray30")
-        separator4.grid(row=19, column=0, columnspan=2, sticky="ew", padx=10, pady=15)
-        
-        # ========== SENSORES METEOROLÓGICOS ==========
-        self._create_weather_sensors()
-    
-    def _create_weather_sensors(self):
-        """Crea la sección de sensores meteorológicos."""
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="🌤 Sensores Meteorológicos",
-            font=('Arial', 15, 'bold'),
-            text_color="#3b82f6"
-        ).grid(row=20, column=0, columnspan=2, pady=(10, 15))
-        
-        # Frame para sensores
-        self.frameSensor = ctk.CTkFrame(self.frameIndicadores, fg_color="#1a1a1a")
-        self.frameSensor.grid(row=21, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
-        
-        # Configurar grid
-        self.frameSensor.grid_columnconfigure(0, weight=1)
-        self.frameSensor.grid_columnconfigure(1, weight=1)
-        
-        # Temperatura
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="🌡 Temp:",
+            text="🧭 GPS",
             font=('Arial', 11, 'bold')
-        ).grid(row=0, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoTemperatura = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoTemperatura.grid(row=0, column=1, padx=10, pady=8, sticky="ew")
-        self.campoTemperatura.insert(0, "-- °C")
-        self.campoTemperatura.configure(state="readonly")
-        
-        # Humedad
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="💧 Humid:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=1, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoHumedad = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoHumedad.grid(row=1, column=1, padx=10, pady=8, sticky="ew")
-        self.campoHumedad.insert(0, "-- %")
-        self.campoHumedad.configure(state="readonly")
-        
-        # Presión
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="📊 Presión:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=2, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoPresion = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoPresion.grid(row=2, column=1, padx=10, pady=8, sticky="ew")
-        self.campoPresion.insert(0, "-- hPa")
-        self.campoPresion.configure(state="readonly")
-        
-        # Viento
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="🌬 Viento:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=3, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoViento = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoViento.grid(row=3, column=1, padx=10, pady=8, sticky="ew")
-        self.campoViento.insert(0, "-- m/s")
-        self.campoViento.configure(state="readonly")
-        
-        # Dirección del Viento
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="🧭 Dir. V.:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=4, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoDireccionViento = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoDireccionViento.grid(row=4, column=1, padx=10, pady=8, sticky="ew")
-        self.campoDireccionViento.insert(0, "-- °")
-        self.campoDireccionViento.configure(state="readonly")
-        
-        # Precipitación
-        ctk.CTkLabel(
-            self.frameSensor,
-            text="🌧 Precip:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=5, column=0, padx=10, pady=8, sticky="w")
-        
-        self.campoPrecipitacion = ctk.CTkEntry(
-            self.frameSensor,
-            font=('Arial', 11),
-            justify='center',
-            width=80
-        )
-        self.campoPrecipitacion.grid(row=5, column=1, padx=10, pady=8, sticky="ew")
-        self.campoPrecipitacion.insert(0, "-- mm")
-        self.campoPrecipitacion.configure(state="readonly")
-        
-        # Separador
-        separator5 = ctk.CTkFrame(self.frameIndicadores, height=2, fg_color="gray30")
-        separator5.grid(row=22, column=0, columnspan=2, sticky="ew", padx=10, pady=15)
-        
-        # ========== GPS Y BRÚJULA ==========
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="🧭 GPS & Brújula",
-            font=('Arial', 15, 'bold'),
-            text_color="#3b82f6"
-        ).grid(row=23, column=0, columnspan=2, pady=(10, 15))
-        
-        # Coordenadas GPS
-        ctk.CTkLabel(
-            self.frameIndicadores,
-            text="Coordenadas:",
-            font=('Arial', 11, 'bold')
-        ).grid(row=24, column=0, padx=10, pady=8, sticky="w")
+        ).grid(row=11, column=0, padx=10, pady=(5, 2), sticky="w")
         
         self.labelCoordenadas2 = ctk.CTkLabel(
             self.frameIndicadores,
             text="0.0, 0.0",
-            font=('Arial', 11),
+            font=('Arial', 10),
             text_color="lightblue"
         )
-        self.labelCoordenadas2.grid(row=24, column=1, padx=10, pady=8, sticky="ew")
+        self.labelCoordenadas2.grid(row=12, column=0, padx=10, pady=2, sticky="ew")
         
-        # Dirección de brújula
+        # Dirección
+        frame_dir = ctk.CTkFrame(self.frameIndicadores, fg_color="transparent")
+        frame_dir.grid(row=13, column=0, padx=10, pady=2, sticky="ew")
+        
+        ctk.CTkLabel(frame_dir, text="Dir:", font=('Arial', 10)).pack(side="left")
+        self.labelDir2 = ctk.CTkLabel(frame_dir, text="0°", font=('Arial', 10), text_color="lightblue")
+        self.labelDir2.pack(side="left", padx=5)
+        
+        # ========== SENSORES METEOROLÓGICOS (en panel expandible) ==========
+        self._create_weather_sensors_compact()
+    
+    def _create_weather_sensors_compact(self):
+        """Crea la sección de sensores meteorológicos compacta."""
+        # Separador
+        separator4 = ctk.CTkFrame(self.frameIndicadores, height=1, fg_color="gray40")
+        separator4.grid(row=14, column=0, sticky="ew", padx=10, pady=5)
+        
         ctk.CTkLabel(
             self.frameIndicadores,
-            text="Dirección:",
+            text="🌤 Meteorología",
             font=('Arial', 11, 'bold')
-        ).grid(row=25, column=0, padx=10, pady=8, sticky="w")
+        ).grid(row=15, column=0, padx=10, pady=(5, 2), sticky="w")
         
-        self.labelDir2 = ctk.CTkLabel(
-            self.frameIndicadores,
-            text="0°",
-            font=('Arial', 11),
-            text_color="lightblue"
-        )
-        self.labelDir2.grid(row=25, column=1, padx=10, pady=8, sticky="ew")
+        # Frame compacto para sensores
+        self.frameSensor = ctk.CTkFrame(self.frameIndicadores, fg_color="#2a2a2a")
+        self.frameSensor.grid(row=16, column=0, padx=10, pady=5, sticky="ew")
+        self.frameSensor.grid_columnconfigure(1, weight=1)
         
-        # Aliases para compatibilidad con código legacy
-        self.campoGanancia = self.campoGain
-        self.campoFecha = ctk.CTkEntry(self.frameSensor, font=('Arial', 11), justify='center', width=80)
-        self.campoTemp = ctk.CTkEntry(self.frameSensor, font=('Arial', 11), justify='center', width=80)
-        self.campoDir = ctk.CTkEntry(self.frameSensor, font=('Arial', 11), justify='center', width=80)
-        self.campoRain = ctk.CTkEntry(self.frameSensor, font=('Arial', 11), justify='center', width=80)
+        # Temperatura
+        ctk.CTkLabel(self.frameSensor, text="🌡", font=('Arial', 9)).grid(row=0, column=0, padx=3, pady=2)
+        self.campoTemperatura = ctk.CTkLabel(self.frameSensor, text="--°C", font=('Arial', 9), text_color="cyan")
+        self.campoTemperatura.grid(row=0, column=1, padx=3, pady=2, sticky="w")
+        
+        # Humedad
+        ctk.CTkLabel(self.frameSensor, text="💧", font=('Arial', 9)).grid(row=0, column=2, padx=3, pady=2)
+        self.campoHumedad = ctk.CTkLabel(self.frameSensor, text="--%", font=('Arial', 9), text_color="cyan")
+        self.campoHumedad.grid(row=0, column=3, padx=3, pady=2, sticky="w")
+        
+        # Viento
+        ctk.CTkLabel(self.frameSensor, text="🌬", font=('Arial', 9)).grid(row=1, column=0, padx=3, pady=2)
+        self.campoViento = ctk.CTkLabel(self.frameSensor, text="--m/s", font=('Arial', 9), text_color="cyan")
+        self.campoViento.grid(row=1, column=1, padx=3, pady=2, sticky="w")
+        
+        # Precipitación
+        ctk.CTkLabel(self.frameSensor, text="🌧", font=('Arial', 9)).grid(row=1, column=2, padx=3, pady=2)
+        self.campoPrecipitacion = ctk.CTkLabel(self.frameSensor, text="--mm", font=('Arial', 9), text_color="cyan")
+        self.campoPrecipitacion.grid(row=1, column=3, padx=3, pady=2, sticky="w")
+        
+        # Presión y dirección del viento (ocultos pero disponibles para compatibilidad)
+        self.campoPresion = ctk.CTkLabel(self.frameSensor, text="--", font=('Arial', 9))
+        self.campoDireccionViento = ctk.CTkLabel(self.frameSensor, text="--", font=('Arial', 9))
+        
+        # Espacio flexible al final
+        spacer = ctk.CTkFrame(self.frameIndicadores, fg_color="transparent", height=10)
+        spacer.grid(row=17, column=0, sticky="nsew")
+        self.frameIndicadores.grid_rowconfigure(17, weight=1)
+    
+    def _create_bottom_bar(self):
+        """Crea la barra inferior con parámetros críticos siempre visibles."""
+        # Frame para la barra inferior
+        self.barraInferior = ctk.CTkFrame(self.principal, fg_color="#1a1a1a", height=90)
+        self.barraInferior.grid(row=1, column=0, columnspan=2, padx=10, pady=(5, 10), sticky="ew")
+        self.barraInferior.grid_propagate(False)
+        
+        # Configurar columnas con igual peso
+        for i in range(6):
+            self.barraInferior.grid_columnconfigure(i, weight=1)
+        
+        # ========== PARÁMETROS EN HORIZONTAL ==========
+        
+        # Rango
+        frame_rango = self._create_param_widget(self.barraInferior, "📏 Rango", "80 km", 0)
+        self.campoRango = frame_rango
+        
+        # Ganancia
+        frame_ganancia = self._create_param_widget(self.barraInferior, "📶 Ganancia", "0 dB", 1)
+        self.campoGain = frame_ganancia
+        self.campoGanancia = frame_ganancia  # Alias
+        
+        # Inclinación
+        frame_inclinacion = self._create_param_widget(self.barraInferior, "📐 Tilt", "0°", 2)
+        self.campoInclinacion = frame_inclinacion
+        
+        # Track
+        frame_track = self._create_param_widget(self.barraInferior, "🎯 Track", "0°", 3)
+        self.campoTrack = frame_track
+        
+        # Perfil Vertical
+        frame_pv = self._create_param_widget(self.barraInferior, "📊 Perfil V.", "OFF", 4)
+        self.campoVp = frame_pv
+        self.campoPV = frame_pv  # Alias
+        
+        # Leyenda de colores (compacta)
+        self._create_color_legend_compact(5)
+    
+    def _create_param_widget(self, parent, label, default_value, column):
+        """Crea un widget de parámetro compacto para la barra inferior."""
+        frame = ctk.CTkFrame(parent, fg_color="#2a2a2a", corner_radius=8)
+        frame.grid(row=0, column=column, padx=5, pady=10, sticky="nsew")
+        
+        # Label del parámetro
+        lbl = ctk.CTkLabel(frame, text=label, font=('Arial', 10, 'bold'), text_color="#888")
+        lbl.pack(pady=(8, 2))
+        
+        # Valor del parámetro
+        valor = ctk.CTkLabel(frame, text=default_value, font=('Arial', 14, 'bold'), text_color="white")
+        valor.pack(pady=(2, 8))
+        
+        # Guardar referencia al label de valor para actualizarlo
+        frame.valor_label = valor
+        return frame
+    
+    def _create_color_legend_compact(self, column):
+        """Crea una leyenda de colores compacta."""
+        frame = ctk.CTkFrame(self.barraInferior, fg_color="#2a2a2a", corner_radius=8)
+        frame.grid(row=0, column=column, padx=5, pady=10, sticky="nsew")
+        
+        ctk.CTkLabel(frame, text="Leyenda", font=('Arial', 9, 'bold'), text_color="#888").pack(pady=(5, 2))
+        
+        # Colores en línea
+        colores_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        colores_frame.pack(pady=2)
+        
+        colores = [
+            ("🟢", "Débil"),
+            ("🟡", "Mod"),
+            ("🔴", "Fuerte"),
+            ("🟣", "Severo")
+        ]
+        
+        for i, (color, texto) in enumerate(colores):
+            ctk.CTkLabel(colores_frame, text=f"{color}", font=('Arial', 8)).grid(row=i//2, column=(i%2)*2, padx=1)
+            ctk.CTkLabel(colores_frame, text=texto, font=('Arial', 7), text_color="#aaa").grid(row=i//2, column=(i%2)*2+1, padx=1)
+    
+    def _update_param_widget(self, widget, value):
+        """Actualiza el valor de un widget de parámetro."""
+        if hasattr(widget, 'valor_label'):
+            widget.valor_label.configure(text=value)
+        elif hasattr(widget, 'configure'):
+            # Fallback para CTkEntry (legacy)
+            try:
+                widget.configure(state="normal")
+                widget.delete(0, "end")
+                widget.insert(0, value)
+                widget.configure(state="readonly")
+            except:
+                pass
     
     def _create_graph_panel(self):
         """Crea el panel derecho con el gráfico del radar."""
@@ -468,18 +368,26 @@ class ResponsiveVisualizationPanel:
         self.frame_grafico.grid_rowconfigure(0, weight=1)
         self.frame_grafico.grid_columnconfigure(0, weight=1)
         
-        # Inicializar el gráfico
+        # Inicializar el gráfico con tamaño adaptable
         self.grafico = self.grafico_class()
         self.fig = self.grafico.fig
         self.ax = self.grafico.ax
         
+        # Ajustar figura para mejor visualización
+        self.fig.set_tight_layout(True)
+        self.fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+        
         # Canvas para el gráfico (RESPONSIVO)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.frame_grafico)
         self.canvas.draw()
-        self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        
+        # Widget del canvas con configuración mejorada
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.grid(row=0, column=0, sticky="nsew")
+        canvas_widget.configure(bg='#1a1a1a')
         
         # Configurar el canvas para que se redimensione con la ventana
-        self.canvas.get_tk_widget().bind("<Configure>", self._on_canvas_resize)
+        canvas_widget.bind("<Configure>", self._on_canvas_resize)
         
         logger.info("Panel de visualización responsivo creado exitosamente")
     
@@ -490,10 +398,17 @@ class ResponsiveVisualizationPanel:
             width_inches = event.width / self.fig.dpi
             height_inches = event.height / self.fig.dpi
             
-            # Solo actualizar si el cambio es significativo (más de 0.5 pulgadas)
-            if abs(self.fig.get_figwidth() - width_inches) > 0.5 or \
-               abs(self.fig.get_figheight() - height_inches) > 0.5:
-                self.fig.set_size_inches(width_inches, height_inches, forward=True)
+            # Mantener proporción cuadrada para el radar
+            min_size = min(width_inches, height_inches)
+            
+            # Solo actualizar si el cambio es significativo (más de 0.3 pulgadas)
+            current_w = self.fig.get_figwidth()
+            current_h = self.fig.get_figheight()
+            
+            if abs(current_w - min_size) > 0.3 or abs(current_h - min_size) > 0.3:
+                # Usar el tamaño más pequeño para mantener proporción
+                self.fig.set_size_inches(min_size, min_size, forward=True)
+                self.fig.subplots_adjust(left=0.08, right=0.92, top=0.92, bottom=0.08)
                 self.canvas.draw_idle()
         except Exception as e:
             logger.debug(f"Error al redimensionar canvas: {e}")
@@ -695,18 +610,12 @@ class ResponsiveVisualizationPanel:
                 self.campoAnuncio.insert("end", "Esperando datos...")
                 self.campoAnuncio.configure(state="disabled")
                 
-                # Valores por defecto en parámetros
-                for campo, valor in [
-                    (self.campoGanancia, "-- dB"),
-                    (self.campoRango, "-- km"),
-                    (self.campoInclinacion, "--°"),
-                    (self.campoTrack, "--°"),
-                    (self.campoPV, "--")
-                ]:
-                    campo.configure(state="normal")
-                    campo.delete(0, "end")
-                    campo.insert(0, valor)
-                    campo.configure(state="readonly")
+                # Valores por defecto en parámetros (barra inferior)
+                self._update_param_widget(self.campoGanancia, "-- dB")
+                self._update_param_widget(self.campoRango, "-- km")
+                self._update_param_widget(self.campoInclinacion, "--°")
+                self._update_param_widget(self.campoTrack, "--°")
+                self._update_param_widget(self.campoVp, "--")
                 
                 # Programar siguiente actualización y salir
                 if self._update_running:
@@ -772,23 +681,17 @@ class ResponsiveVisualizationPanel:
                 self.campoAnuncio.insert("end", "✓ Sin modos especiales")
             self.campoAnuncio.configure(state="disabled")
             
-            # Actualizar parámetros del radar
-            self.campoGanancia.configure(state="normal")
-            self.campoGanancia.delete(0, "end")
-            self.campoGanancia.insert(0, f"{self.barrido_actual.ganancia} dB")
-            self.campoGanancia.configure(state="readonly")
+            # Actualizar parámetros del radar (barra inferior)
+            self._update_param_widget(self.campoGanancia, f"{self.barrido_actual.ganancia} dB")
+            self._update_param_widget(self.campoRango, f"{self.barrido_actual.rango} km")
+            self._update_param_widget(self.campoInclinacion, f"{self.barrido_actual.inclinacion}°")
+            self._update_param_widget(self.campoTrack, f"{getattr(self.barrido_actual, 'track', 0)}°")
             
-            self.campoRango.configure(state="normal")
-            self.campoRango.delete(0, "end")
-            self.campoRango.insert(0, f"{self.barrido_actual.rango} km")
-            self.campoRango.configure(state="readonly")
+            # Perfil vertical
+            pv_status = "ON" if 7 in getattr(self.barrido_actual, 'anuncio', []) else "OFF"
+            self._update_param_widget(self.campoVp, pv_status)
             
-            self.campoInclinacion.configure(state="normal")
-            self.campoInclinacion.delete(0, "end")
-            self.campoInclinacion.insert(0, f"{self.barrido_actual.inclinacion}°")
-            self.campoInclinacion.configure(state="readonly")
-            
-            # Actualizar sensores meteorológicos
+            # Actualizar sensores meteorológicos (panel izquierdo)
             try:
                 nombre_archivo = "CR310_RK900_10.csv"
                 datosSensor = CS.obtener_ultima_lectura(nombre_archivo)
@@ -796,24 +699,19 @@ class ResponsiveVisualizationPanel:
                 if datosSensor:
                     # Temperatura
                     if 'Temperature' in datosSensor:
-                        self.campoTemperatura.configure(state="normal")
-                        self.campoTemperatura.delete(0, "end")
-                        self.campoTemperatura.insert(0, f"{datosSensor.get('Temperature')} °C")
-                        self.campoTemperatura.configure(state="readonly")
+                        self.campoTemperatura.configure(text=f"{datosSensor.get('Temperature')}°C")
                     
-                    # Dirección del viento
-                    if 'Wind_Direction' in datosSensor:
-                        self.campoDireccionViento.configure(state="normal")
-                        self.campoDireccionViento.delete(0, "end")
-                        self.campoDireccionViento.insert(0, f"{datosSensor.get('Wind_Direction')}°")
-                        self.campoDireccionViento.configure(state="readonly")
+                    # Humedad
+                    if 'Humidity' in datosSensor:
+                        self.campoHumedad.configure(text=f"{datosSensor.get('Humidity')}%")
+                    
+                    # Viento
+                    if 'Wind_Speed' in datosSensor:
+                        self.campoViento.configure(text=f"{datosSensor.get('Wind_Speed')}m/s")
                     
                     # Precipitación
                     if 'Precipitation' in datosSensor:
-                        self.campoPrecipitacion.configure(state="normal")
-                        self.campoPrecipitacion.delete(0, "end")
-                        self.campoPrecipitacion.insert(0, f"{datosSensor.get('Precipitation')} mm")
-                        self.campoPrecipitacion.configure(state="readonly")
+                        self.campoPrecipitacion.configure(text=f"{datosSensor.get('Precipitation')}mm")
             except Exception as e:
                 logger.warning(f"No se pudieron cargar datos meteorológicos: {e}")
             
