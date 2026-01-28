@@ -81,19 +81,14 @@ class ResponsiveControlPanel:
                 rtb.RevoluteDH(a=0.5, offset=-np.pi/2)
             ], name='Radar')
             
-            self.robot.plot([0, 0], limits=[-0.5, 0.5, -0.5, 0.5, 0, 0.8])
-            self.fig = plt.gcf()
-            self.ax = plt.gca()
-            self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
-            self.ax.plot([0, 1], [0, 0], [0, 0])
+            # Crear visualización inicial mejorada
+            self._crear_visualizacion_radar(0, 0)
             
-            self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
-            self.frameGG.canvas.draw()
         except Exception as e:
             logger.error(f"Error al crear robot 3D: {e}")
             label_error = ctk.CTkLabel(
                 self.frameGG,
-                text="Robot 3D\n(requiere roboticstoolbox)",
+                text="Visualización 3D del Radar\n(requiere roboticstoolbox)",
                 font=("Arial", 14),
                 text_color="gray"
             )
@@ -504,6 +499,372 @@ class ResponsiveControlPanel:
     # ==================== MÉTODOS DE LA CLASE ====================
     # (Copio los métodos existentes del código legacy)
     
+    def _crear_visualizacion_radar(self, angulo_rotacion, angulo_inclinacion):
+        """
+        Crea una visualización 3D del radar Bendix King ART 2000.
+        
+        Args:
+            angulo_rotacion: Ángulo de rotación en grados (horizontal)
+            angulo_inclinacion: Ángulo de inclinación en grados (vertical)
+        """
+        try:
+            # Crear figura con fondo oscuro para mejor contraste
+            self.fig = plt.figure(figsize=(8, 6), facecolor='#2b2b2b')
+            self.ax = self.fig.add_subplot(111, projection='3d')
+            self.ax.set_facecolor('#1e1e1e')
+            
+            # Configurar límites y labels
+            self.ax.set_xlim([-0.4, 0.4])
+            self.ax.set_ylim([-0.4, 0.4])
+            self.ax.set_zlim([0, 0.6])
+            
+            self.ax.set_xlabel('X (m)', color='white', fontsize=9)
+            self.ax.set_ylabel('Y (m)', color='white', fontsize=9)
+            self.ax.set_zlabel('Z (m)', color='white', fontsize=9)
+            
+            # Estilo de los ejes
+            self.ax.tick_params(colors='white', labelsize=8)
+            self.ax.xaxis.pane.fill = False
+            self.ax.yaxis.pane.fill = False
+            self.ax.zaxis.pane.fill = False
+            self.ax.grid(True, alpha=0.3, color='gray')
+            
+            # === DIBUJAR BASE CIRCULAR DEL ART 2000 ===
+            self._dibujar_base_art2000()
+            
+            # === DIBUJAR ESTRUCTURA DE MONTAJE CENTRAL ===
+            z_estructura = 0.15  # Altura de la estructura de montaje
+            self._dibujar_estructura_montaje(z_estructura)
+            
+            # === CALCULAR ROTACIÓN Y POSICIÓN DE LA PLATAFORMA SUPERIOR ===
+            # La plataforma superior rota según angulo_rotacion
+            rot_rad = np.deg2rad(angulo_rotacion)
+            inc_rad = np.deg2rad(angulo_inclinacion)
+            
+            # === DIBUJAR PLATAFORMA SUPERIOR ROTATORIA ===
+            z_plataforma = z_estructura + 0.05
+            self._dibujar_plataforma_superior(z_plataforma, rot_rad)
+            
+            # === DIBUJAR ANTENA DEL RADAR (SOBRE LA PLATAFORMA) ===
+            z_antena_base = z_plataforma + 0.02
+            self._dibujar_antena_art2000(z_antena_base, rot_rad, inc_rad)
+            
+            # === DIBUJAR BEAM DEL RADAR ===
+            # Calcular posición de emisión del beam
+            offset_antena = 0.15  # Distancia desde el centro
+            x_beam = offset_antena * np.sin(rot_rad)
+            y_beam = offset_antena * np.cos(rot_rad)
+            z_beam = z_antena_base + 0.08
+            
+            self._dibujar_beam_art2000(x_beam, y_beam, z_beam, rot_rad, inc_rad)
+            
+            # Título con modelo específico
+            self.ax.set_title(
+                f'Bendix King ART 2000\nAzimuth: {angulo_rotacion:.1f}° | Elevation: {angulo_inclinacion:.1f}°',
+                color='white',
+                fontsize=11,
+                pad=15
+            )
+            
+            # Ajustar vista inicial (vista isométrica)
+            self.ax.view_init(elev=25, azim=45)
+            
+            # Crear canvas y empaquetar
+            self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
+            self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
+            self.frameGG.canvas.draw()
+            
+        except Exception as e:
+            logger.error(f"Error en _crear_visualizacion_radar: {e}")
+    
+    def _dibujar_base_art2000(self):
+        """Dibuja la base circular del Bendix King ART 2000 con ventilaciones."""
+        theta = np.linspace(0, 2*np.pi, 50)
+        radio_base = 0.28
+        
+        # Base circular principal (color beige/gris militar)
+        x_base = radio_base * np.cos(theta)
+        y_base = radio_base * np.sin(theta)
+        z_base = np.zeros_like(theta)
+        
+        self.ax.plot(x_base, y_base, z_base, color='#8B8680', linewidth=4, alpha=0.9)
+        
+        # Rellenar la base
+        from matplotlib.patches import Circle
+        from mpl_toolkits.mplot3d import art3d
+        
+        circle = Circle((0, 0), radio_base, color='#A8A49A', alpha=0.7)
+        self.ax.add_patch(circle)
+        art3d.pathpatch_2d_to_3d(circle, z=0, zdir="z")
+        
+        # Agregar ventilaciones (agujeros) alrededor del perímetro
+        num_ventilaciones = 24
+        radio_ventilacion = radio_base * 0.85
+        
+        for i in range(num_ventilaciones):
+            angulo = i * 2 * np.pi / num_ventilaciones
+            x_vent = radio_ventilacion * np.cos(angulo)
+            y_vent = radio_ventilacion * np.sin(angulo)
+            # Dibujar pequeños círculos como ventilaciones
+            self.ax.scatter([x_vent], [y_vent], [0.001], 
+                          color='#3a3a3a', s=15, alpha=0.8, marker='o')
+        
+        # Borde interno de la base
+        radio_interno = 0.15
+        x_interno = radio_interno * np.cos(theta)
+        y_interno = radio_interno * np.sin(theta)
+        self.ax.plot(x_interno, y_interno, np.zeros_like(theta), 
+                    color='#6B6860', linewidth=2, alpha=0.8)
+    
+    def _dibujar_estructura_montaje(self, altura):
+        """Dibuja la estructura de montaje cuadrada/rectangular del ART 2000."""
+        # Color gris militar
+        color_estructura = '#7C8577'
+        color_oscuro = '#5A5F54'
+        
+        # Dimensiones de la estructura (cuadrada/rectangular robusta)
+        lado = 0.20
+        
+        # Esquinas de la estructura
+        x_corners = [-lado/2, lado/2, lado/2, -lado/2, -lado/2]
+        y_corners = [-lado/2, -lado/2, lado/2, lado/2, -lado/2]
+        
+        # Dibujar base de la estructura (nivel inferior)
+        z_base = 0.02
+        self.ax.plot(x_corners, y_corners, [z_base]*5, 
+                    color=color_estructura, linewidth=3, alpha=0.9)
+        
+        # Dibujar parte superior de la estructura
+        self.ax.plot(x_corners, y_corners, [altura]*5, 
+                    color=color_estructura, linewidth=3, alpha=0.9)
+        
+        # Columnas verticales en las esquinas
+        for i in range(4):
+            x = x_corners[i]
+            y = y_corners[i]
+            self.ax.plot([x, x], [y, y], [z_base, altura], 
+                        color=color_oscuro, linewidth=4, alpha=0.9)
+        
+        # Paneles laterales (superficies)
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        
+        # Panel frontal
+        verts_front = [
+            [(-lado/2, -lado/2, z_base), (lado/2, -lado/2, z_base), 
+             (lado/2, -lado/2, altura), (-lado/2, -lado/2, altura)]
+        ]
+        self.ax.add_collection3d(Poly3DCollection(
+            verts_front, facecolors=color_estructura, 
+            linewidths=1, edgecolors=color_oscuro, alpha=0.6
+        ))
+        
+        # Panel trasero
+        verts_back = [
+            [(-lado/2, lado/2, z_base), (lado/2, lado/2, z_base), 
+             (lado/2, lado/2, altura), (-lado/2, lado/2, altura)]
+        ]
+        self.ax.add_collection3d(Poly3DCollection(
+            verts_back, facecolors=color_estructura, 
+            linewidths=1, edgecolors=color_oscuro, alpha=0.6
+        ))
+        
+        # Motor central (cilindro negro)
+        self._dibujar_motor_central(altura)
+    
+    def _dibujar_motor_central(self, z_pos):
+        """Dibuja el motor/mecanismo central visible del ART 2000."""
+        theta = np.linspace(0, 2*np.pi, 30)
+        radio_motor = 0.06
+        altura_motor = 0.08
+        
+        # Cuerpo del motor (cilindro negro/gris oscuro)
+        z_levels = np.linspace(z_pos - 0.02, z_pos + altura_motor, 8)
+        
+        for z_level in z_levels:
+            x_motor = radio_motor * np.cos(theta)
+            y_motor = radio_motor * np.sin(theta)
+            z_motor = np.full_like(theta, z_level)
+            self.ax.plot(x_motor, y_motor, z_motor, 
+                        color='#2C2C2C', linewidth=1.5, alpha=0.8)
+        
+        # Detalles del motor (líneas verticales)
+        for i in range(6):
+            angulo = i * np.pi / 3
+            x_vert = [radio_motor * np.cos(angulo)] * 2
+            y_vert = [radio_motor * np.sin(angulo)] * 2
+            z_vert = [z_pos - 0.02, z_pos + altura_motor]
+            self.ax.plot(x_vert, y_vert, z_vert, 
+                        color='#1a1a1a', linewidth=2, alpha=0.9)
+        
+        # Centro del motor (eje)
+        self.ax.scatter([0], [0], [z_pos + altura_motor/2], 
+                       color='#4A4A4A', s=100, alpha=1.0, marker='o')
+    
+    def _dibujar_plataforma_superior(self, z_pos, rot_rad):
+        """Dibuja la plataforma superior rotatoria del ART 2000."""
+        # Plataforma rectangular grande con esquinas redondeadas
+        largo = 0.32
+        ancho = 0.28
+        color_plataforma = '#C0BDB5'  # Beige/plateado
+        
+        # Crear forma de la plataforma con esquinas redondeadas
+        # Puntos de la plataforma (sin rotar)
+        x_plat = []
+        y_plat = []
+        
+        # Lados largos y cortos con esquinas redondeadas
+        num_puntos = 50
+        for i in range(num_puntos):
+            t = i / num_puntos * 2 * np.pi
+            
+            if t < np.pi/2:  # Esquina 1
+                x_local = largo/2 - 0.02 + 0.02 * np.cos(t)
+                y_local = ancho/2 - 0.02 + 0.02 * np.sin(t)
+            elif t < np.pi:  # Esquina 2
+                x_local = -largo/2 + 0.02 - 0.02 * np.cos(t - np.pi/2)
+                y_local = ancho/2 - 0.02 + 0.02 * np.sin(t - np.pi/2)
+            elif t < 3*np.pi/2:  # Esquina 3
+                x_local = -largo/2 + 0.02 - 0.02 * np.cos(t - np.pi)
+                y_local = -ancho/2 + 0.02 - 0.02 * np.sin(t - np.pi)
+            else:  # Esquina 4
+                x_local = largo/2 - 0.02 + 0.02 * np.cos(t - 3*np.pi/2)
+                y_local = -ancho/2 + 0.02 - 0.02 * np.sin(t - 3*np.pi/2)
+            
+            # Aplicar rotación
+            x_rot = x_local * np.cos(rot_rad) - y_local * np.sin(rot_rad)
+            y_rot = x_local * np.sin(rot_rad) + y_local * np.cos(rot_rad)
+            
+            x_plat.append(x_rot)
+            y_plat.append(y_rot)
+        
+        x_plat.append(x_plat[0])
+        y_plat.append(y_plat[0])
+        
+        # Dibujar borde de la plataforma
+        self.ax.plot(x_plat, y_plat, [z_pos]*len(x_plat), 
+                    color='#8B8680', linewidth=3, alpha=0.9)
+        
+        # Agregar agujeros de montaje (puntos negros)
+        agujeros_config = [
+            (0.12, 0.10), (0.12, -0.10), (-0.12, 0.10), (-0.12, -0.10),
+            (0.08, 0), (-0.08, 0), (0, 0.08), (0, -0.08)
+        ]
+        
+        for dx, dy in agujeros_config:
+            # Rotar posición del agujero
+            x_aguj = dx * np.cos(rot_rad) - dy * np.sin(rot_rad)
+            y_aguj = dx * np.sin(rot_rad) + dy * np.cos(rot_rad)
+            self.ax.scatter([x_aguj], [y_aguj], [z_pos + 0.001], 
+                          color='#2a2a2a', s=20, alpha=0.9, marker='o')
+    
+    def _dibujar_antena_art2000(self, z_base, rot_rad, inc_rad):
+        """Dibuja la antena del radar ART 2000 (plato parabólico meteorológico)."""
+        # Posición de la antena (desplazada del centro)
+        offset = 0.15
+        x_center = offset * np.sin(rot_rad)
+        y_center = offset * np.cos(rot_rad)
+        z_center = z_base + 0.08
+        
+        # Crear plato parabólico
+        u = np.linspace(0, 2*np.pi, 25)
+        v = np.linspace(0, 1, 12)
+        U, V = np.meshgrid(u, v)
+        
+        # Dimensiones del plato
+        radio_plato = 0.12
+        profundidad = 0.04
+        
+        # Forma parabólica en coordenadas locales
+        X_local = radio_plato * V * np.cos(U)
+        Y_local = radio_plato * V * np.sin(U)
+        Z_local = -profundidad * V**2
+        
+        # Aplicar inclinación y rotación
+        cos_rot = np.cos(rot_rad)
+        sin_rot = np.sin(rot_rad)
+        cos_inc = np.cos(inc_rad)
+        sin_inc = np.sin(inc_rad)
+        
+        # Rotación alrededor de Z (azimuth)
+        X_rot1 = X_local * cos_rot - Y_local * sin_rot
+        Y_rot1 = X_local * sin_rot + Y_local * cos_rot
+        Z_rot1 = Z_local
+        
+        # Inclinación (elevation) - rotar alrededor del eje perpendicular
+        X_final = X_rot1 * cos_inc + Z_rot1 * sin_inc
+        Y_final = Y_rot1
+        Z_final = -X_rot1 * sin_inc + Z_rot1 * cos_inc
+        
+        # Trasladar a posición final
+        X_antena = x_center + X_final
+        Y_antena = y_center + Y_final
+        Z_antena = z_center + Z_final
+        
+        # Dibujar superficie del plato (color beige/dorado)
+        self.ax.plot_surface(X_antena, Y_antena, Z_antena, 
+                            color='#D4AF37', alpha=0.75, 
+                            edgecolor='#B8960F', linewidth=0.5)
+        
+        # Soporte de la antena (brazo corto)
+        x_soporte_base = offset * 0.5 * np.sin(rot_rad)
+        y_soporte_base = offset * 0.5 * np.cos(rot_rad)
+        
+        self.ax.plot([x_soporte_base, x_center], 
+                    [y_soporte_base, y_center],
+                    [z_base, z_center],
+                    color='#6B6860', linewidth=5, alpha=0.9)
+        
+        # Alimentador central (feed)
+        self.ax.scatter([x_center], [y_center], [z_center], 
+                       color='#8B4513', s=60, alpha=1.0, marker='s')
+    
+    def _dibujar_beam_art2000(self, x, y, z, rot_rad, inc_rad):
+        """Dibuja el haz de radiación del radar meteorológico."""
+        longitud_beam = 0.25
+        
+        # Vector dirección del beam (según rotación e inclinación)
+        dx = longitud_beam * np.cos(inc_rad) * np.sin(rot_rad)
+        dy = longitud_beam * np.cos(inc_rad) * np.cos(rot_rad)
+        dz = longitud_beam * np.sin(inc_rad)
+        
+        x_end = x + dx
+        y_end = y + dy
+        z_end = z + dz
+        
+        # Línea central del beam
+        self.ax.plot([x, x_end], [y, y_end], [z, z_end],
+                    color='#00FF41', linewidth=2.5, alpha=0.9, 
+                    linestyle='--')
+        
+        # Cono del beam (apertura de ~3 grados para radar meteorológico)
+        angulo_apertura = np.deg2rad(3)
+        
+        for i in range(12):
+            theta = i * 2 * np.pi / 12
+            r_offset = longitud_beam * np.tan(angulo_apertura)
+            
+            # Crear offset perpendicular al beam
+            # Vector perpendicular 1: perpendicular a la dirección del beam
+            perp1_x = -np.cos(rot_rad)
+            perp1_y = np.sin(rot_rad)
+            perp1_z = 0
+            
+            # Vector perpendicular 2: producto cruz
+            perp2_x = np.sin(inc_rad) * np.sin(rot_rad)
+            perp2_y = np.sin(inc_rad) * np.cos(rot_rad)
+            perp2_z = np.cos(inc_rad)
+            
+            x_offset = r_offset * (perp1_x * np.cos(theta) + perp2_x * np.sin(theta))
+            y_offset = r_offset * (perp1_y * np.cos(theta) + perp2_y * np.sin(theta))
+            z_offset = r_offset * (perp1_z * np.cos(theta) + perp2_z * np.sin(theta))
+            
+            x_cone = x_end + x_offset
+            y_cone = y_end + y_offset
+            z_cone = z_end + z_offset
+            
+            self.ax.plot([x, x_cone], [y, y_cone], [z, z_cone],
+                        color='#00FF41', linewidth=0.4, alpha=0.25)
+    
     def actualizar_puertos(self):
         """Actualiza lista de puertos disponibles."""
         self.combobox_port.configure(state='normal')
@@ -812,32 +1173,27 @@ class ResponsiveControlPanel:
             
             try:
                 # Guardar ángulos de vista
-                elev = self.ax.elev
-                azim = self.ax.azim
+                elev = self.ax.elev if hasattr(self, 'ax') else 20
+                azim = self.ax.azim if hasattr(self, 'ax') else 45
                 
                 # CORRECCIÓN: Destruir el canvas anterior antes de crear uno nuevo
                 if hasattr(self.frameGG, 'canvas'):
                     self.frameGG.canvas.get_tk_widget().destroy()
                 
                 # Cerrar la figura anterior
-                plt.close(self.fig)
+                if hasattr(self, 'fig'):
+                    plt.close(self.fig)
                 
-                # Crear nueva figura con el robot actualizado
-                self.robot.plot([np.deg2rad(dato1num), np.deg2rad(dato2num)],
-                              limits=[-0.5, 0.5, -0.5, 0.5, 0, 0.8])
-                self.fig = plt.gcf()
-                self.ax = plt.gca()
+                # Crear nueva visualización mejorada del radar
+                self._crear_visualizacion_radar(dato1num, dato2num)
                 
-                # Crear nuevo canvas
-                self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
-                self.ax.plot([0, 1], [0, 0], [0, 0])
-                self.ax.view_init(elev=elev, azim=azim)
-                
-                # Empaquetar el nuevo canvas
-                self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
-                self.frameGG.canvas.draw()
+                # Restaurar ángulos de vista
+                if hasattr(self, 'ax'):
+                    self.ax.view_init(elev=elev, azim=azim)
+                    self.frameGG.canvas.draw()
+                    
             except Exception as e:
-                logger.error(f"Error al actualizar robot: {e}")
+                logger.error(f"Error al actualizar visualización del radar: {e}")
 
 
 # Alias para compatibilidad
