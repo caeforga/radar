@@ -266,19 +266,18 @@ class ResponsiveMapPanel:
     
     def _create_map_panel(self):
         """Crea el widget del mapa que ocupa todo el panel."""
-        # Crear el mapa
+        # Crear el mapa con mayor cache para evitar pérdida de tiles
         self.map_widget = tkintermapview.TkinterMapView(
             self.principal,
             corner_radius=0,
-            bg_color="#1a1a2e"
+            bg_color="#1a1a2e",
+            database_path=None  # Usar cache en memoria para evitar problemas de disco
         )
         self.map_widget.grid(row=0, column=0, sticky="nsew")
         
-        # Configurar el mapa
-        self.map_widget.set_tile_server(
-            "https://mt0.google.com/vt/lyrs=y&hl=es&x={x}&y={y}&z={z}&s=Ga",
-            max_zoom=19
-        )  # Híbrido de Google (lyrs=y) para ver etiquetas
+        # Configurar el mapa con servidor OpenStreetMap (más estable y sin restricciones)
+        # Usar servidor con etiquetas y mejor disponibilidad
+        self._configurar_tile_server()
         
         # Posición inicial
         self.map_widget.set_position(self.latitud, self.longitud)
@@ -288,6 +287,27 @@ class ResponsiveMapPanel:
         self.radar_overlay_marker = None
         
         logger.info("Mapa inicializado correctamente")
+    
+    def _configurar_tile_server(self):
+        """Configura el servidor de tiles con Google Hybrid para mejor visualización."""
+        try:
+            # Google Hybrid (satélite con etiquetas) - formato correcto para tkintermapview
+            self.map_widget.set_tile_server(
+                "https://mt0.google.com/vt/lyrs=y&hl=es&x={x}&y={y}&z={z}&s=Ga",
+                max_zoom=19
+            )
+            logger.info("Tile server configurado: Google Hybrid")
+        except Exception as e:
+            logger.warning(f"Error configurando Google Hybrid: {e}")
+            # Fallback: usar servidor por defecto de tkintermapview (OpenStreetMap)
+            try:
+                self.map_widget.set_tile_server(
+                    "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    max_zoom=19
+                )
+                logger.info("Tile server fallback: OpenStreetMap")
+            except Exception as e2:
+                logger.warning(f"Error con fallback OpenStreetMap: {e2}")
     
     def _create_info_overlays(self):
         """Crea los overlays de información sobre el mapa con diseño profesional."""
@@ -716,8 +736,12 @@ class ResponsiveMapPanel:
     def _update_map_zoom(self):
         """Actualiza el nivel de zoom del mapa basado en el rango del radar."""
         try:
+            # Verificar que el widget del mapa existe y es válido
+            if not hasattr(self, 'map_widget') or self.map_widget is None:
+                return
+            
             # Estimar zoom level apropiado según el rango en km
-            # Google Maps Zoom levels aproximados para vista completa:
+            # Zoom levels aproximados para vista completa:
             # 40km -> Zoom 10-11
             # 80km -> Zoom 9-10
             # 120km -> Zoom 8-9
@@ -734,11 +758,24 @@ class ResponsiveMapPanel:
             else:
                 target_zoom = 6
             
+            # Guardar zoom anterior para verificar si cambió
+            current_zoom = getattr(self, '_last_zoom', None)
+            
             # Solo actualizar si es diferente para evitar redibujados innecesarios
-            if self.map_widget.zoom != target_zoom:
-                self.map_widget.set_zoom(target_zoom)
+            if current_zoom != target_zoom:
+                self._last_zoom = target_zoom
+                # Usar after para evitar conflictos con el thread principal
+                self.root.after(10, lambda: self._safe_set_zoom(target_zoom))
         except Exception as e:
             logger.debug(f"Error actualizando zoom: {e}")
+    
+    def _safe_set_zoom(self, zoom_level):
+        """Establece el zoom de forma segura en el thread principal."""
+        try:
+            if hasattr(self, 'map_widget') and self.map_widget is not None:
+                self.map_widget.set_zoom(zoom_level)
+        except Exception as e:
+            logger.debug(f"Error en safe_set_zoom: {e}")
 
     def _update_radar_overlay(self):
         """Actualiza el overlay visual del radar en el mapa."""

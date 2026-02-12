@@ -9,8 +9,39 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import logging
+import urllib.request
+import json
 
 logger = logging.getLogger(__name__)
+
+
+def obtener_ubicacion_pc():
+    """
+    Obtiene la ubicación del PC usando servicios de geolocalización por IP.
+    
+    Returns:
+        tuple: (latitud, longitud) o (0, 0) si falla
+    """
+    apis = [
+        ("http://ip-api.com/json/", lambda d: (d.get("lat", 0), d.get("lon", 0))),
+        ("https://ipapi.co/json/", lambda d: (d.get("latitude", 0), d.get("longitude", 0))),
+        ("https://ipinfo.io/json", lambda d: tuple(map(float, d.get("loc", "0,0").split(",")))),
+    ]
+    
+    for url, parser in apis:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                lat, lon = parser(data)
+                if lat != 0 or lon != 0:
+                    logger.info(f"Ubicación del PC obtenida: {lat}, {lon}")
+                    return float(lat), float(lon)
+        except Exception as e:
+            logger.debug(f"Error con API {url}: {e}")
+            continue
+    
+    logger.warning("No se pudo obtener la ubicación del PC")
+    return 0, 0
 
 # Import opcional de Captura (requiere saleae)
 try:
@@ -93,11 +124,33 @@ class ResponsiveVisualizationPanel:
         
         self.gps1 = None
         self.gps2 = None
-        self.compass = None
+        self.compass = 0
+        
+        # Variables para GPS del PC
+        self.latitud = 0
+        self.longitud = 0
+        self._ubicacion_pc_obtenida = False
+        self._ubicacion_lock = threading.Lock()
+        
+        # Obtener ubicación del PC al iniciar (en segundo plano)
+        threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
         
         # Variables de control de actualización
         self._update_id = None  # ID del timer de actualización
         self._update_running = False  # Flag para controlar el ciclo
+    
+    def _obtener_ubicacion_pc(self):
+        """Obtiene la ubicación del PC en segundo plano usando geolocalización por IP."""
+        try:
+            lat, lon = obtener_ubicacion_pc()
+            if lat != 0 or lon != 0:
+                with self._ubicacion_lock:
+                    self.latitud = lat
+                    self.longitud = lon
+                    self._ubicacion_pc_obtenida = True
+                logger.info(f"Ubicación del PC establecida: {lat}, {lon}")
+        except Exception as e:
+            logger.error(f"Error obteniendo ubicación del PC: {e}")
     
     def _create_indicators_panel(self):
         """Crea el panel izquierdo COMPACTO con indicadores de estado."""
@@ -464,40 +517,22 @@ class ResponsiveVisualizationPanel:
         """
         try:
             if 'temperatura' in datos:
-                self.campoTemperatura.configure(state="normal")
-                self.campoTemperatura.delete(0, "end")
-                self.campoTemperatura.insert(0, f"{datos['temperatura']:.1f} °C")
-                self.campoTemperatura.configure(state="readonly")
+                self.campoTemperatura.configure(text=f"{datos['temperatura']:.1f}°C")
             
             if 'humedad' in datos:
-                self.campoHumedad.configure(state="normal")
-                self.campoHumedad.delete(0, "end")
-                self.campoHumedad.insert(0, f"{datos['humedad']:.1f} %")
-                self.campoHumedad.configure(state="readonly")
+                self.campoHumedad.configure(text=f"{datos['humedad']:.1f}%")
             
             if 'presion' in datos:
-                self.campoPresion.configure(state="normal")
-                self.campoPresion.delete(0, "end")
-                self.campoPresion.insert(0, f"{datos['presion']:.1f} hPa")
-                self.campoPresion.configure(state="readonly")
+                self.campoPresion.configure(text=f"{datos['presion']:.1f} hPa")
             
             if 'viento' in datos:
-                self.campoViento.configure(state="normal")
-                self.campoViento.delete(0, "end")
-                self.campoViento.insert(0, f"{datos['viento']:.1f} m/s")
-                self.campoViento.configure(state="readonly")
+                self.campoViento.configure(text=f"{datos['viento']:.1f}m/s")
             
             if 'direccion_viento' in datos:
-                self.campoDireccionViento.configure(state="normal")
-                self.campoDireccionViento.delete(0, "end")
-                self.campoDireccionViento.insert(0, f"{datos['direccion_viento']:.0f}°")
-                self.campoDireccionViento.configure(state="readonly")
+                self.campoDireccionViento.configure(text=f"{datos['direccion_viento']:.0f}°")
             
             if 'precipitacion' in datos:
-                self.campoPrecipitacion.configure(state="normal")
-                self.campoPrecipitacion.delete(0, "end")
-                self.campoPrecipitacion.insert(0, f"{datos['precipitacion']:.2f} mm")
-                self.campoPrecipitacion.configure(state="readonly")
+                self.campoPrecipitacion.configure(text=f"{datos['precipitacion']:.2f}mm")
             
         except Exception as e:
             logger.error(f"Error al actualizar sensores: {e}")
@@ -525,7 +560,6 @@ class ResponsiveVisualizationPanel:
     def actualizar(self):
         """Actualiza todos los componentes del panel con nueva información."""
         import time
-        import GPS
         import CargaSensor as CS
         
         tinicial = time.time()
@@ -536,51 +570,30 @@ class ResponsiveVisualizationPanel:
             hilo = threading.Thread(target=self.nueva_lectura, daemon=True)
             hilo.start()
             
-            # Leer datos GPS y brújula
-            try:
-                self.serial.leer_datos()
-                gps1 = self.serial.datos_recibidos.get()
-                print(f"GPS1: {gps1}")
-                
-                self.serial.leer_datos()
-                gps2 = self.serial.datos_recibidos.get()
-                print(f"GPS2: {gps2}")
-                
-                self.serial.leer_datos()
-                self.compass = self.serial.datos_recibidos.get()
-                print(f"Compass: {self.compass}")
-                
-                self.gps1 = GPS.main(gps1)
-                self.gps2 = GPS.main(gps2)
-                
-                self.serial.arduino.reset_input_buffer()
-                
-                # Procesar coordenadas GPS
-                if (self.gps1.get("fix_quality") == 0 or 
-                    self.gps1.get("satellites_in_use") < 4 or 
-                    self.gps2.get("status") == 'V'):
-                    self.latitud = 0
-                    self.longitud = 0
-                else:
-                    self.latitud = float(self.gps1.get("latitude"))
-                    self.longitud = float(self.gps1.get("longitude"))
-            except Exception as e:
-                logger.error(f"Error leyendo datos GPS/Brújula: {e}")
-                self.latitud = 0
-                self.longitud = 0
-                self.compass = 0
+            # Usar ubicación del PC (ya obtenida al iniciar)
+            # Si aún no se ha obtenido, intentar nuevamente en segundo plano
+            if not self._ubicacion_pc_obtenida:
+                threading.Thread(target=self._obtener_ubicacion_pc, daemon=True).start()
             
-            # Actualizar labels de GPS
+            # Obtener coordenadas de forma thread-safe
+            with self._ubicacion_lock:
+                lat = self.latitud
+                lon = self.longitud
+            
+            # Orientación fija a 0 (sin brújula del radar, posición estática)
+            self.compass = 0
+            
+            # Actualizar labels de GPS (ubicación del PC)
             self.labelCoordenadas2.configure(
-                text=f"{round(self.latitud, 5)}, {round(self.longitud, 5)}"
+                text=f"{round(lat, 5)}, {round(lon, 5)}"
             )
-            self.labelDir2.configure(text=str(self.compass))
+            self.labelDir2.configure(text=f"{self.compass}°")
             
-            # Actualizar gráfico del radar
+            # Actualizar gráfico del radar (usar variables locales thread-safe)
             self.grafico.actualizar_grafico(
                 self.barrido_actual,
-                self.latitud,
-                self.longitud,
+                lat,
+                lon,
                 self.compass
             )
             self.canvas.draw_idle()

@@ -913,12 +913,23 @@ class ResponsiveControlPanel:
         self.label_estado.configure(text="● Volviendo a Home...", text_color="orange")
         self.root.update()
         
-        # Enviar comando de retorno a home (0,0)
-        self.datos_arduino.enviar_datos("0,0")
+        # Enviar comando de retorno a home (0,0) - formato: M{inclinacion},{rotacion}
+        # El formato correcto para el ART 2000 es "M" + inclinación + "," + rotación
+        self.datos_arduino.enviar_datos("M0,0")
         
         # Actualizar sliders visualmente a posición 0
         self.slider1.set(0)
         self.slider2.set(0)
+        
+        # Actualizar visualización 3D del radar a posición home
+        try:
+            if hasattr(self.frameGG, 'canvas'):
+                self.frameGG.canvas.get_tk_widget().destroy()
+            if hasattr(self, 'fig'):
+                plt.close(self.fig)
+            self._crear_visualizacion_radar(0, 0)
+        except Exception as e:
+            logger.debug(f"Error actualizando visualización en home: {e}")
         
         self.entry1.configure(state='normal')
         self.entry1.delete(0, ctk.END)
