@@ -501,19 +501,28 @@ class ResponsiveControlPanel:
     
     def _crear_visualizacion_radar(self, angulo_rotacion, angulo_inclinacion):
         """
-        Crea una visualización 3D del radar Bendix King ART 2000.
+        Crea o actualiza la visualización 3D del radar Bendix King ART 2000.
+        
+        Reutiliza la figura y el canvas existentes para evitar parpadeo.
+        Solo crea elementos nuevos en la primera invocación.
         
         Args:
             angulo_rotacion: Ángulo de rotación en grados (horizontal)
             angulo_inclinacion: Ángulo de inclinación en grados (vertical)
         """
         try:
-            # Crear figura con fondo oscuro para mejor contraste
-            self.fig = plt.figure(figsize=(8, 6), facecolor='#2b2b2b')
-            self.ax = self.fig.add_subplot(111, projection='3d')
+            es_nuevo = not hasattr(self, '_radar_canvas_listo') or not self._radar_canvas_listo
+            
+            if es_nuevo:
+                self.fig = plt.figure(figsize=(8, 6), facecolor='#2b2b2b')
+                self.ax = self.fig.add_subplot(111, projection='3d')
+            else:
+                self._view_elev = self.ax.elev
+                self._view_azim = self.ax.azim
+                self.ax.cla()
+            
             self.ax.set_facecolor('#1e1e1e')
             
-            # Configurar límites y labels
             self.ax.set_xlim([-0.4, 0.4])
             self.ax.set_ylim([-0.4, 0.4])
             self.ax.set_zlim([0, 0.6])
@@ -522,43 +531,32 @@ class ResponsiveControlPanel:
             self.ax.set_ylabel('Y (m)', color='white', fontsize=9)
             self.ax.set_zlabel('Z (m)', color='white', fontsize=9)
             
-            # Estilo de los ejes
             self.ax.tick_params(colors='white', labelsize=8)
             self.ax.xaxis.pane.fill = False
             self.ax.yaxis.pane.fill = False
             self.ax.zaxis.pane.fill = False
             self.ax.grid(True, alpha=0.3, color='gray')
             
-            # === DIBUJAR BASE CIRCULAR DEL ART 2000 ===
             self._dibujar_base_art2000()
             
-            # === DIBUJAR ESTRUCTURA DE MONTAJE CENTRAL ===
-            z_estructura = 0.15  # Altura de la estructura de montaje
+            z_estructura = 0.15
             self._dibujar_estructura_montaje(z_estructura)
             
-            # === CALCULAR ROTACIÓN Y POSICIÓN DE LA PLATAFORMA SUPERIOR ===
-            # La plataforma superior rota según angulo_rotacion
             rot_rad = np.deg2rad(angulo_rotacion)
             inc_rad = np.deg2rad(angulo_inclinacion)
             
-            # === DIBUJAR PLATAFORMA SUPERIOR ROTATORIA ===
             z_plataforma = z_estructura + 0.05
             self._dibujar_plataforma_superior(z_plataforma, rot_rad)
             
-            # === DIBUJAR ANTENA DEL RADAR (SOBRE LA PLATAFORMA) ===
             z_antena_base = z_plataforma + 0.02
             self._dibujar_antena_art2000(z_antena_base, rot_rad, inc_rad)
             
-            # === DIBUJAR BEAM DEL RADAR ===
-            # Calcular posición de emisión del beam
-            offset_antena = 0.15  # Distancia desde el centro
+            offset_antena = 0.15
             x_beam = offset_antena * np.sin(rot_rad)
             y_beam = offset_antena * np.cos(rot_rad)
             z_beam = z_antena_base + 0.08
-            
             self._dibujar_beam_art2000(x_beam, y_beam, z_beam, rot_rad, inc_rad)
             
-            # Título con modelo específico
             self.ax.set_title(
                 f'Bendix King ART 2000\nAzimuth: {angulo_rotacion:.1f}° | Elevation: {angulo_inclinacion:.1f}°',
                 color='white',
@@ -566,16 +564,19 @@ class ResponsiveControlPanel:
                 pad=15
             )
             
-            # Ajustar vista inicial (vista isométrica)
-            self.ax.view_init(elev=25, azim=45)
-            
-            # Crear canvas y empaquetar
-            self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
-            self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
-            self.frameGG.canvas.draw()
+            if es_nuevo:
+                self.ax.view_init(elev=25, azim=45)
+                self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
+                self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
+                self.frameGG.canvas.draw()
+                self._radar_canvas_listo = True
+            else:
+                self.ax.view_init(elev=self._view_elev, azim=self._view_azim)
+                self.frameGG.canvas.draw_idle()
             
         except Exception as e:
             logger.error(f"Error en _crear_visualizacion_radar: {e}")
+            self._radar_canvas_listo = False
     
     def _dibujar_base_art2000(self):
         """Dibuja la base circular del Bendix King ART 2000 con ventilaciones."""
@@ -906,63 +907,61 @@ class ResponsiveControlPanel:
     
     def desconectar_serial(self):
         """Desconecta del puerto serial con retorno a home primero."""
-        # Deshabilitar botón para evitar múltiples clicks
-        self.bt_desconectar.configure(state='disabled')
+        # Capturar posición actual ANTES de deshabilitar
+        angulo_rot = abs(int(self.slider1.get()))
+        angulo_inc = abs(int(self.slider2.get()))
         
-        # Mostrar estado de retorno a home
+        # Bloquear controles de inmediato para evitar comandos durante el retorno
+        self.flagsliders2 = 0
+        self.bt_desconectar.configure(state='disabled')
+        self.slider1.configure(state='disabled')
+        self.slider2.configure(state='disabled')
+        self.entry1.configure(state='disabled')
+        self.entry2.configure(state='disabled')
+        self.botonStandby.configure(state='disabled')
+        
         self.label_estado.configure(text="● Volviendo a Home...", text_color="orange")
         self.root.update()
         
-        # Enviar comando de retorno a home (0,0) - formato: M{inclinacion},{rotacion}
-        # El formato correcto para el ART 2000 es "M" + inclinación + "," + rotación
+        # Enviar comando de retorno a home - formato: M{inclinacion},{rotacion}
         self.datos_arduino.enviar_datos("M0,0")
         
-        # Actualizar sliders visualmente a posición 0
+        # Actualizar sliders y entries visualmente
         self.slider1.set(0)
         self.slider2.set(0)
-        
-        # Actualizar visualización 3D del radar a posición home
-        try:
-            if hasattr(self.frameGG, 'canvas'):
-                self.frameGG.canvas.get_tk_widget().destroy()
-            if hasattr(self, 'fig'):
-                plt.close(self.fig)
-            self._crear_visualizacion_radar(0, 0)
-        except Exception as e:
-            logger.debug(f"Error actualizando visualización en home: {e}")
         
         self.entry1.configure(state='normal')
         self.entry1.delete(0, ctk.END)
         self.entry1.insert(0, '0')
         self.entry1.configure(state='readonly')
+        self.entry1.configure(state='disabled')
         
         self.entry2.configure(state='normal')
         self.entry2.delete(0, ctk.END)
         self.entry2.insert(0, '0')
         self.entry2.configure(state='readonly')
-        
-        # Esperar a que los motores lleguen a home (3 segundos)
-        self.root.after(3000, self._completar_desconexion)
-    
-    def _completar_desconexion(self):
-        """Completa la desconexión después del retorno a home."""
-        # Deshabilitar controles
-        self.slider1.configure(state='disabled')
-        self.entry1.configure(state='disabled')
-        self.slider2.configure(state='disabled')
         self.entry2.configure(state='disabled')
         
-        # Actualizar estado de botones
+        # Actualizar visualización 3D sin parpadeo
+        try:
+            self._crear_visualizacion_radar(0, 0)
+        except Exception as e:
+            logger.debug(f"Error actualizando visualización en home: {e}")
+        
+        # Calcular tiempo de espera proporcional a la distancia angular
+        # ~50ms por grado, mínimo 3s, máximo 12s
+        max_angulo = max(angulo_rot, angulo_inc)
+        tiempo_espera = max(3000, min(12000, int(max_angulo * 50) + 1500))
+        
+        self.root.after(tiempo_espera, self._completar_desconexion)
+    
+    def _completar_desconexion(self):
+        """Completa la desconexión después de que los motores llegaron a home."""
+        self.datos_arduino.desconectar()
+        
         self.bt_actualizar.configure(state='normal')
         self.bt_conectar.configure(state='normal')
-        self.bt_desconectar.configure(state='disabled')
-        self.botonStandby.configure(state='disabled')
         
-        # Desconectar del puerto serial
-        self.datos_arduino.desconectar()
-        self.flagsliders2 = 0
-        
-        # Actualizar estado visual
         self.label_estado.configure(text="● Desconectado", text_color="red")
         messagebox.showinfo("Desconexión", "Motores en posición home.\nDesconectado del puerto serial.")
     
@@ -1183,26 +1182,7 @@ class ResponsiveControlPanel:
             self.datos_arduino.enviar_datos("M" + str(dato2) + "," + str(dato1))
             
             try:
-                # Guardar ángulos de vista
-                elev = self.ax.elev if hasattr(self, 'ax') else 20
-                azim = self.ax.azim if hasattr(self, 'ax') else 45
-                
-                # CORRECCIÓN: Destruir el canvas anterior antes de crear uno nuevo
-                if hasattr(self.frameGG, 'canvas'):
-                    self.frameGG.canvas.get_tk_widget().destroy()
-                
-                # Cerrar la figura anterior
-                if hasattr(self, 'fig'):
-                    plt.close(self.fig)
-                
-                # Crear nueva visualización mejorada del radar
                 self._crear_visualizacion_radar(dato1num, dato2num)
-                
-                # Restaurar ángulos de vista
-                if hasattr(self, 'ax'):
-                    self.ax.view_init(elev=elev, azim=azim)
-                    self.frameGG.canvas.draw()
-                    
             except Exception as e:
                 logger.error(f"Error al actualizar visualización del radar: {e}")
 
