@@ -1,6 +1,6 @@
 customtkinter
 Pillow
-numpy<2
+numpy
 matplotlib
 pyserial
 cartopy
