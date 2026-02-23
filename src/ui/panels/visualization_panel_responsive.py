@@ -9,18 +9,53 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import logging
+import asyncio
 import urllib.request
 import json
 
 logger = logging.getLogger(__name__)
 
+try:
+    import winsdk.windows.devices.geolocation as wdg
+    WINSDK_DISPONIBLE = True
+except ImportError:
+    WINSDK_DISPONIBLE = False
+    logger.info("winsdk no disponible, se usará geolocalización por IP como fallback")
 
-def obtener_ubicacion_pc():
+
+def _obtener_ubicacion_winsdk():
     """
-    Obtiene la ubicación del PC usando servicios de geolocalización por IP.
+    Obtiene la ubicación usando Windows Location Service (GPS/Wi-Fi/Cell).
+    Mucho más precisa que la geolocalización por IP.
     
     Returns:
-        tuple: (latitud, longitud) o (0, 0) si falla
+        tuple: (latitud, longitud) o None si falla
+    """
+    async def _get_coords():
+        locator = wdg.Geolocator()
+        locator.desired_accuracy = wdg.PositionAccuracy.HIGH
+        pos = await locator.get_geoposition_async()
+        return (pos.coordinate.latitude, pos.coordinate.longitude)
+    
+    try:
+        lat, lon = asyncio.run(_get_coords())
+        if lat != 0 or lon != 0:
+            logger.info(f"Ubicación obtenida via Windows Location Service: {lat}, {lon}")
+            return float(lat), float(lon)
+    except PermissionError:
+        logger.warning("Permiso denegado: habilita el acceso a ubicación en Configuración de Windows")
+    except Exception as e:
+        logger.warning(f"Error con Windows Location Service: {e}")
+    return None
+
+
+def _obtener_ubicacion_ip():
+    """
+    Fallback: obtiene la ubicación por geolocalización de IP.
+    Menos precisa (nivel ciudad), pero no requiere permisos especiales.
+    
+    Returns:
+        tuple: (latitud, longitud) o None si falla
     """
     apis = [
         ("http://ip-api.com/json/", lambda d: (d.get("lat", 0), d.get("lon", 0))),
@@ -34,13 +69,32 @@ def obtener_ubicacion_pc():
                 data = json.loads(response.read().decode())
                 lat, lon = parser(data)
                 if lat != 0 or lon != 0:
-                    logger.info(f"Ubicación del PC obtenida: {lat}, {lon}")
+                    logger.info(f"Ubicación obtenida via IP ({url}): {lat}, {lon}")
                     return float(lat), float(lon)
         except Exception as e:
             logger.debug(f"Error con API {url}: {e}")
             continue
+    return None
+
+
+def obtener_ubicacion_pc():
+    """
+    Obtiene la ubicación del PC. Intenta primero con Windows Location Service
+    (GPS/Wi-Fi, alta precisión) y si falla usa geolocalización por IP como fallback.
     
-    logger.warning("No se pudo obtener la ubicación del PC")
+    Returns:
+        tuple: (latitud, longitud) o (0, 0) si todos los métodos fallan
+    """
+    if WINSDK_DISPONIBLE:
+        resultado = _obtener_ubicacion_winsdk()
+        if resultado:
+            return resultado
+    
+    resultado = _obtener_ubicacion_ip()
+    if resultado:
+        return resultado
+    
+    logger.warning("No se pudo obtener la ubicación del PC por ningún método")
     return 0, 0
 
 # Import opcional de Captura (requiere saleae)
