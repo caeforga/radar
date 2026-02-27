@@ -145,7 +145,7 @@ class ResponsiveVisualizationPanel:
         # Fila 0: Panel principal (indicadores + gráfico) - peso alto
         # Fila 1: Barra de parámetros inferior - altura fija
         self.principal.grid_rowconfigure(0, weight=1)
-        self.principal.grid_rowconfigure(1, weight=0, minsize=100)  # Barra inferior fija
+        self.principal.grid_rowconfigure(1, weight=0, minsize=66)  # Barra inferior compacta
         self.principal.grid_columnconfigure(0, weight=0, minsize=200)  # Indicadores compactos
         self.principal.grid_columnconfigure(1, weight=1)  # Gráfico (ocupa el resto)
         
@@ -376,80 +376,57 @@ class ResponsiveVisualizationPanel:
     
     def _create_bottom_bar(self):
         """Crea la barra inferior con parámetros críticos siempre visibles."""
-        # Frame para la barra inferior
-        self.barraInferior = ctk.CTkFrame(self.principal, fg_color="#1a1a1a", height=90)
-        self.barraInferior.grid(row=1, column=0, columnspan=2, padx=10, pady=(5, 10), sticky="ew")
+        self.barraInferior = ctk.CTkFrame(self.principal, fg_color="#1a1a1a", height=60)
+        self.barraInferior.grid(row=1, column=0, columnspan=2, padx=10, pady=(3, 6), sticky="ew")
         self.barraInferior.grid_propagate(False)
-        
-        # Configurar columnas con igual peso
+
         for i in range(6):
             self.barraInferior.grid_columnconfigure(i, weight=1)
-        
-        # ========== PARÁMETROS EN HORIZONTAL ==========
-        
-        # Rango
-        frame_rango = self._create_param_widget(self.barraInferior, "📏 Rango", "80 km", 0)
-        self.campoRango = frame_rango
-        
-        # Ganancia
-        frame_ganancia = self._create_param_widget(self.barraInferior, "📶 Ganancia", "0 dB", 1)
+
+        self.campoRango = self._create_param_widget(self.barraInferior, "Rango", "80 km", 0)
+        frame_ganancia = self._create_param_widget(self.barraInferior, "Ganancia", "0 dB", 1)
         self.campoGain = frame_ganancia
-        self.campoGanancia = frame_ganancia  # Alias
-        
-        # Inclinación
-        frame_inclinacion = self._create_param_widget(self.barraInferior, "📐 Tilt", "0°", 2)
-        self.campoInclinacion = frame_inclinacion
-        
-        # Track
-        frame_track = self._create_param_widget(self.barraInferior, "🎯 Track", "0°", 3)
-        self.campoTrack = frame_track
-        
-        # Perfil Vertical
-        frame_pv = self._create_param_widget(self.barraInferior, "📊 Perfil V.", "OFF", 4)
+        self.campoGanancia = frame_ganancia
+        self.campoInclinacion = self._create_param_widget(self.barraInferior, "Tilt", "0°", 2)
+        self.campoTrack = self._create_param_widget(self.barraInferior, "Track", "0°", 3)
+        frame_pv = self._create_param_widget(self.barraInferior, "Perfil V.", "OFF", 4)
         self.campoVp = frame_pv
-        self.campoPV = frame_pv  # Alias
-        
-        # Leyenda de colores (compacta)
+        self.campoPV = frame_pv
         self._create_color_legend_compact(5)
-    
+
     def _create_param_widget(self, parent, label, default_value, column):
         """Crea un widget de parámetro compacto para la barra inferior."""
-        frame = ctk.CTkFrame(parent, fg_color="#2a2a2a", corner_radius=8)
-        frame.grid(row=0, column=column, padx=5, pady=10, sticky="nsew")
-        
-        # Label del parámetro
-        lbl = ctk.CTkLabel(frame, text=label, font=('Arial', 10, 'bold'), text_color="#888")
-        lbl.pack(pady=(8, 2))
-        
-        # Valor del parámetro
-        valor = ctk.CTkLabel(frame, text=default_value, font=('Arial', 14, 'bold'), text_color="white")
-        valor.pack(pady=(2, 8))
-        
-        # Guardar referencia al label de valor para actualizarlo
+        frame = ctk.CTkFrame(parent, fg_color="#2a2a2a", corner_radius=6)
+        frame.grid(row=0, column=column, padx=3, pady=6, sticky="nsew")
+
+        lbl = ctk.CTkLabel(frame, text=label, font=('Arial', 8, 'bold'), text_color="#888")
+        lbl.pack(pady=(4, 0))
+
+        valor = ctk.CTkLabel(frame, text=default_value, font=('Arial', 12, 'bold'), text_color="white")
+        valor.pack(pady=(0, 4))
+
         frame.valor_label = valor
         return frame
-    
+
     def _create_color_legend_compact(self, column):
-        """Crea una leyenda de colores compacta."""
-        frame = ctk.CTkFrame(self.barraInferior, fg_color="#2a2a2a", corner_radius=8)
-        frame.grid(row=0, column=column, padx=5, pady=10, sticky="nsew")
-        
-        ctk.CTkLabel(frame, text="Leyenda", font=('Arial', 9, 'bold'), text_color="#888").pack(pady=(5, 2))
-        
-        # Colores en línea
+        """Crea una leyenda de colores compacta en una sola fila."""
+        frame = ctk.CTkFrame(self.barraInferior, fg_color="#2a2a2a", corner_radius=6)
+        frame.grid(row=0, column=column, padx=3, pady=6, sticky="nsew")
+
         colores_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        colores_frame.pack(pady=2)
-        
-        colores = [
-            ("🟢", "Débil"),
-            ("🟡", "Mod"),
-            ("🔴", "Fuerte"),
-            ("🟣", "Severo")
+        colores_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        items = [
+            ("#22c55e", "Dbl"),
+            ("#eab308", "Mod"),
+            ("#ef4444", "Fte"),
+            ("#a855f7", "Sev"),
         ]
-        
-        for i, (color, texto) in enumerate(colores):
-            ctk.CTkLabel(colores_frame, text=f"{color}", font=('Arial', 8)).grid(row=i//2, column=(i%2)*2, padx=1)
-            ctk.CTkLabel(colores_frame, text=texto, font=('Arial', 7), text_color="#aaa").grid(row=i//2, column=(i%2)*2+1, padx=1)
+        for i, (hex_color, texto) in enumerate(items):
+            dot = ctk.CTkFrame(colores_frame, width=8, height=8, corner_radius=4, fg_color=hex_color)
+            dot.grid(row=i, column=0, padx=(2, 2), pady=1)
+            dot.grid_propagate(False)
+            ctk.CTkLabel(colores_frame, text=texto, font=('Arial', 7), text_color="#aaa").grid(row=i, column=1, padx=(0, 2), pady=0, sticky="w")
     
     def _update_param_widget(self, widget, value):
         """Actualiza el valor de un widget de parámetro."""

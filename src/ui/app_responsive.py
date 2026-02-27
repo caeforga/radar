@@ -329,185 +329,204 @@ class ResponsiveRadarApp:
         
         self.current_panel = welcome_frame
     
+    def _show_loading(self, panel_name):
+        """Muestra indicador de carga y limpia el contenedor."""
+        if self.current_panel:
+            try:
+                self.current_panel.grid_forget()
+            except Exception:
+                pass
+        for widget in self.container.winfo_children():
+            try:
+                widget.grid_forget()
+            except Exception:
+                pass
+
+        self._loading_frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        self._loading_frame.grid(row=0, column=0, sticky="nsew")
+        self._loading_frame.grid_rowconfigure(0, weight=1)
+        self._loading_frame.grid_columnconfigure(0, weight=1)
+
+        inner = ctk.CTkFrame(self._loading_frame, fg_color="transparent")
+        inner.place(relx=0.5, rely=0.5, anchor="center")
+
+        self._loading_label = ctk.CTkLabel(
+            inner, text=f"Cargando {panel_name}",
+            font=("Arial", 18), text_color="white"
+        )
+        self._loading_label.pack(pady=(0, 10))
+
+        self._loading_dots = 0
+        self._animate_loading()
+        self.current_panel = self._loading_frame
+        self.root.update_idletasks()
+
+    def _animate_loading(self):
+        """Anima los puntos suspensivos del indicador de carga."""
+        if not hasattr(self, '_loading_label') or not self._loading_label.winfo_exists():
+            return
+        base = self._loading_label.cget("text").rstrip(".")
+        self._loading_dots = (self._loading_dots % 3) + 1
+        self._loading_label.configure(text=base.rstrip(".") + "." * self._loading_dots)
+        self._loading_after_id = self.root.after(400, self._animate_loading)
+
+    def _hide_loading(self):
+        """Oculta el indicador de carga."""
+        if hasattr(self, '_loading_after_id'):
+            self.root.after_cancel(self._loading_after_id)
+        if hasattr(self, '_loading_frame') and self._loading_frame.winfo_exists():
+            self._loading_frame.grid_forget()
+            self._loading_frame.destroy()
+
     def show_control_panel(self):
         """Muestra el panel de control responsivo."""
         logger.info("Mostrando panel de control responsivo")
-        
-        # CORRECCIÓN: Detener ciclos de actualización de otros paneles
+        self._highlight_active_button(self.btn_control)
+
         if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
             self.objeto_visualizacion.detener()
         if self.objeto_mapa is not None and hasattr(self.objeto_mapa, 'detener'):
             self.objeto_mapa.detener()
-        
-        # Importar panel de control responsivo
-        if self.objeto_control is None:
+
+        if self.objeto_control is not None:
+            self._finish_show_control()
+            return
+
+        self._show_loading("Control")
+        self.root.after(50, self._load_control_deferred)
+
+    def _load_control_deferred(self):
+        """Carga el panel de control de forma diferida."""
+        try:
+            from src.ui.panels import ResponsiveControlPanel
+            self.objeto_control = ResponsiveControlPanel(self.root, self.container, self.serial)
+            logger.info("Panel de control responsivo creado")
+        except Exception as e:
+            logger.error(f"Error al crear panel de control responsivo: {e}")
             try:
-                from src.ui.panels import ResponsiveControlPanel
-                self.objeto_control = ResponsiveControlPanel(self.root, self.container, self.serial)
-                logger.info("Panel de control responsivo creado")
-            except Exception as e:
-                logger.error(f"Error al crear panel de control responsivo: {e}")
-                logger.info("Intentando cargar versión legacy...")
-                try:
-                    from mejorada import panel_control
-                    self.objeto_control = panel_control(self.root, self.container, self.serial)
-                    logger.info("Panel de control legacy cargado como fallback")
-                except Exception as e2:
-                    logger.error(f"Error al cargar fallback: {e2}")
-                    messagebox.showerror(
-                        "Error",
-                        f"No se pudo cargar el panel de control:\n{str(e)}\n\nFallback: {str(e2)}"
-                    )
-                    return
-        
-        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
-        if self.current_panel:
-            try:
-                self.current_panel.grid_forget()
-            except:
-                pass
-        
-        # Limpiar cualquier widget residual en el contenedor
+                from mejorada import panel_control
+                self.objeto_control = panel_control(self.root, self.container, self.serial)
+            except Exception as e2:
+                self._hide_loading()
+                messagebox.showerror("Error",
+                    f"No se pudo cargar el panel de control:\n{e}\n\nFallback: {e2}")
+                return
+        self._finish_show_control()
+
+    def _finish_show_control(self):
+        """Muestra el panel de control ya cargado."""
+        self._hide_loading()
         for widget in self.container.winfo_children():
             try:
                 widget.grid_forget()
-            except:
+            except Exception:
                 pass
-        
         self.objeto_control.principal.grid(row=0, column=0, sticky="nsew")
         self.current_panel = self.objeto_control.principal
-        
-        # Destacar botón activo
-        self._highlight_active_button(self.btn_control)
     
     def show_visualization_panel(self):
         """Muestra el panel de visualización responsivo."""
         logger.info("Mostrando panel de visualización responsivo")
-        
-        # Verificar conexión serial
+
         if not self.serial.status:
             messagebox.showerror(
                 "Sin comunicación serial",
                 "Establezca primero la comunicación serial desde el panel de Control"
             )
             return
-        
-        # Detener ciclo de actualización del mapa si está activo
+
+        self._highlight_active_button(self.btn_visualizacion)
+
         if self.objeto_mapa is not None and hasattr(self.objeto_mapa, 'detener'):
             self.objeto_mapa.detener()
-        
-        # Importar panel de visualización responsivo
-        if self.objeto_visualizacion is None:
+
+        if self.objeto_visualizacion is not None:
+            self._finish_show_visualization()
+            return
+
+        self._show_loading("Visualización")
+        self.root.after(50, self._load_visualization_deferred)
+
+    def _load_visualization_deferred(self):
+        """Carga el panel de visualización de forma diferida."""
+        try:
+            from src.ui.panels import ResponsiveVisualizationPanel
+            self.objeto_visualizacion = ResponsiveVisualizationPanel(
+                self.root, self.container, self.serial)
+            self.objeto_visualizacion.iniciar()
+            logger.info("Panel de visualización responsivo creado")
+        except Exception as e:
+            logger.error(f"Error al crear panel de visualización responsivo: {e}")
             try:
-                from src.ui.panels import ResponsiveVisualizationPanel
-                self.objeto_visualizacion = ResponsiveVisualizationPanel(
-                    self.root,
-                    self.container,
-                    self.serial
-                )
+                from mejorada import panel_visualizacion
+                self.objeto_visualizacion = panel_visualizacion(
+                    self.root, self.container, self.serial)
                 self.objeto_visualizacion.iniciar()
-                logger.info("Panel de visualización responsivo creado")
-            except Exception as e:
-                logger.error(f"Error al crear panel de visualización responsivo: {e}")
-                logger.info("Intentando cargar versión legacy...")
-                try:
-                    from mejorada import panel_visualizacion
-                    self.objeto_visualizacion = panel_visualizacion(
-                        self.root,
-                        self.container,
-                        self.serial
-                    )
-                    self.objeto_visualizacion.iniciar()
-                    logger.info("Panel de visualización legacy cargado como fallback")
-                except Exception as e2:
-                    logger.error(f"Error al cargar fallback: {e2}")
-                    messagebox.showerror(
-                        "Error",
-                        f"No se pudo cargar el panel de visualización:\n{str(e)}\n\nFallback: {str(e2)}"
-                    )
-                    return
-        
-        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
-        if self.current_panel:
-            try:
-                self.current_panel.grid_forget()
-            except:
-                pass
-        
-        # Limpiar cualquier widget residual en el contenedor
+            except Exception as e2:
+                self._hide_loading()
+                messagebox.showerror("Error",
+                    f"No se pudo cargar el panel de visualización:\n{e}\n\nFallback: {e2}")
+                return
+        self._finish_show_visualization()
+
+    def _finish_show_visualization(self):
+        """Muestra el panel de visualización ya cargado."""
+        self._hide_loading()
         for widget in self.container.winfo_children():
             try:
                 widget.grid_forget()
-            except:
+            except Exception:
                 pass
-        
         self.objeto_visualizacion.principal.grid(row=0, column=0, sticky="nsew")
         self.current_panel = self.objeto_visualizacion.principal
-        
-        # CORRECCIÓN: Reiniciar ciclo de actualización al mostrar el panel
-        # (el método iniciar() ahora previene duplicados automáticamente)
         if hasattr(self.objeto_visualizacion, 'iniciar'):
             self.objeto_visualizacion.iniciar()
-        
-        # Destacar botón activo
-        self._highlight_active_button(self.btn_visualizacion)
     
     def show_map_panel(self):
         """Muestra el panel de mapa geográfico responsivo."""
         logger.info("Mostrando panel de mapa geográfico")
-        
-        # Nota: No se requiere conexión serial para el panel de mapa
-        # Se puede usar el MODO DEMO para pruebas sin radar conectado
-        
-        # Detener actualización del panel de visualización si está activo
+
+        self._highlight_active_button(self.btn_mapa)
+
         if self.objeto_visualizacion is not None and hasattr(self.objeto_visualizacion, 'detener'):
             self.objeto_visualizacion.detener()
-        
-        # Importar panel de mapa responsivo
-        if self.objeto_mapa is None:
-            try:
-                from src.ui.panels import ResponsiveMapPanel
-                self.objeto_mapa = ResponsiveMapPanel(
-                    self.root,
-                    self.container,
-                    self.serial
-                )
-                # No iniciar automáticamente, el usuario decide si usa DEMO o conexión real
-                logger.info("Panel de mapa responsivo creado")
-            except Exception as e:
-                logger.error(f"Error al crear panel de mapa responsivo: {e}")
-                messagebox.showerror(
-                    "Error",
-                    f"No se pudo cargar el panel de mapa:\n{str(e)}"
-                )
-                return
-        
-        # CORRECCIÓN: Limpiar contenedor antes de mostrar panel
-        if self.current_panel:
-            try:
-                self.current_panel.grid_forget()
-            except:
-                pass
-        
-        # Limpiar cualquier widget residual en el contenedor
+
+        if self.objeto_mapa is not None:
+            self._finish_show_map()
+            return
+
+        self._show_loading("Mapa")
+        self.root.after(50, self._load_map_deferred)
+
+    def _load_map_deferred(self):
+        """Carga el panel de mapa de forma diferida."""
+        try:
+            from src.ui.panels import ResponsiveMapPanel
+            self.objeto_mapa = ResponsiveMapPanel(
+                self.root, self.container, self.serial)
+            logger.info("Panel de mapa responsivo creado")
+        except Exception as e:
+            logger.error(f"Error al crear panel de mapa responsivo: {e}")
+            self._hide_loading()
+            messagebox.showerror("Error",
+                f"No se pudo cargar el panel de mapa:\n{e}")
+            return
+        self._finish_show_map()
+
+    def _finish_show_map(self):
+        """Muestra el panel de mapa ya cargado."""
+        self._hide_loading()
         for widget in self.container.winfo_children():
             try:
                 widget.grid_forget()
-            except:
+            except Exception:
                 pass
-        
         self.objeto_mapa.principal.grid(row=0, column=0, sticky="nsew")
         self.current_panel = self.objeto_mapa.principal
-        
-        # Solo iniciar actualización automática si hay conexión serial
-        # De lo contrario, el usuario puede usar el MODO DEMO
         if self.serial.status and hasattr(self.objeto_mapa, 'iniciar'):
             self.objeto_mapa.iniciar()
         else:
             logger.info("Sin conexión serial - Use el botón DEMO para probar")
-        
-        # Destacar botón activo
-        self._highlight_active_button(self.btn_mapa)
     
     def _highlight_active_button(self, active_button):
         """Destaca el botón activo."""

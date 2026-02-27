@@ -245,6 +245,7 @@ class ResponsiveControlPanel:
             text_color="red"
         )
         self.label_estado.grid(row=8, column=0, pady=(20, 10), padx=10)
+        
     
     def _create_controls_section(self):
         """Crea la sección de controles del radar responsiva."""
@@ -499,20 +500,61 @@ class ResponsiveControlPanel:
     # ==================== MÉTODOS DE LA CLASE ====================
     # (Copio los métodos existentes del código legacy)
     
+    def _rotar_z(self, x, y, ang):
+        """Rota coordenadas (x,y) alrededor del eje Z."""
+        c, s = np.cos(ang), np.sin(ang)
+        return x * c - y * s, x * s + y * c
+
+    def _inclinar_xz(self, x, z, ang):
+        """Inclina coordenadas (x,z) alrededor del eje Y (elevación)."""
+        c, s = np.cos(ang), np.sin(ang)
+        return x * c - z * s, x * s + z * c
+
+    def _transformar(self, x, y, z, rot, inc, pivote_z):
+        """Aplica inclinación alrededor del pivote y luego rotación en azimut."""
+        z_rel = z - pivote_z
+        x_i, z_i = self._inclinar_xz(x, z_rel, inc)
+        z_i += pivote_z
+        x_r, y_r = self._rotar_z(x_i, y, rot)
+        return x_r, y_r, z_i
+
+    def _hacer_caja(self, x0, x1, y0, y1, z0, z1, color, alpha=0.7, edge='#1a1a1a'):
+        """Dibuja un paralelepípedo (caja) como Poly3DCollection."""
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        v = [
+            [(x0,y0,z0),(x1,y0,z0),(x1,y1,z0),(x0,y1,z0)],
+            [(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)],
+            [(x0,y0,z0),(x1,y0,z0),(x1,y0,z1),(x0,y0,z1)],
+            [(x0,y1,z0),(x1,y1,z0),(x1,y1,z1),(x0,y1,z1)],
+            [(x0,y0,z0),(x0,y1,z0),(x0,y1,z1),(x0,y0,z1)],
+            [(x1,y0,z0),(x1,y1,z0),(x1,y1,z1),(x1,y0,z1)],
+        ]
+        self.ax.add_collection3d(Poly3DCollection(
+            v, facecolors=color, linewidths=0.5, edgecolors=edge, alpha=alpha
+        ))
+
+    def _hacer_caja_rot(self, x0, x1, y0, y1, z0, z1, rot, color, alpha=0.7, edge='#1a1a1a'):
+        """Dibuja una caja rotada alrededor del eje Z."""
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        corners = [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]
+        rc = [self._rotar_z(x, y, rot) for x, y in corners]
+        bot = [(x, y, z0) for x, y in rc]
+        top = [(x, y, z1) for x, y in rc]
+        v = [
+            bot, top,
+            [bot[0], bot[1], top[1], top[0]],
+            [bot[1], bot[2], top[2], top[1]],
+            [bot[2], bot[3], top[3], top[2]],
+            [bot[3], bot[0], top[0], top[3]],
+        ]
+        self.ax.add_collection3d(Poly3DCollection(
+            v, facecolors=color, linewidths=0.5, edgecolors=edge, alpha=alpha
+        ))
+
     def _crear_visualizacion_radar(self, angulo_rotacion, angulo_inclinacion):
-        """
-        Crea o actualiza la visualización 3D del radar Bendix King ART 2000.
-        
-        Reutiliza la figura y el canvas existentes para evitar parpadeo.
-        Solo crea elementos nuevos en la primera invocación.
-        
-        Args:
-            angulo_rotacion: Ángulo de rotación en grados (horizontal)
-            angulo_inclinacion: Ángulo de inclinación en grados (vertical)
-        """
+        """Crea o actualiza la visualización 3D del radar ART 2000."""
         try:
             es_nuevo = not hasattr(self, '_radar_canvas_listo') or not self._radar_canvas_listo
-            
             if es_nuevo:
                 self.fig = plt.figure(figsize=(8, 6), facecolor='#2b2b2b')
                 self.ax = self.fig.add_subplot(111, projection='3d')
@@ -520,52 +562,43 @@ class ResponsiveControlPanel:
                 self._view_elev = self.ax.elev
                 self._view_azim = self.ax.azim
                 self.ax.cla()
-            
+
             self.ax.set_facecolor('#1e1e1e')
-            
-            self.ax.set_xlim([-0.4, 0.4])
-            self.ax.set_ylim([-0.4, 0.4])
-            self.ax.set_zlim([0, 0.6])
-            
-            self.ax.set_xlabel('X (m)', color='white', fontsize=9)
-            self.ax.set_ylabel('Y (m)', color='white', fontsize=9)
-            self.ax.set_zlabel('Z (m)', color='white', fontsize=9)
-            
-            self.ax.tick_params(colors='white', labelsize=8)
+            self.ax.set_xlim([-0.30, 0.30])
+            self.ax.set_ylim([-0.30, 0.30])
+            self.ax.set_zlim([0, 0.50])
+            self.ax.set_xlabel('X', color='white', fontsize=8)
+            self.ax.set_ylabel('Y', color='white', fontsize=8)
+            self.ax.set_zlabel('Z', color='white', fontsize=8)
+            self.ax.tick_params(colors='white', labelsize=6)
             self.ax.xaxis.pane.fill = False
             self.ax.yaxis.pane.fill = False
             self.ax.zaxis.pane.fill = False
-            self.ax.grid(True, alpha=0.3, color='gray')
-            
-            self._dibujar_base_art2000()
-            
-            z_estructura = 0.15
-            self._dibujar_estructura_montaje(z_estructura)
-            
-            rot_rad = np.deg2rad(angulo_rotacion)
-            inc_rad = np.deg2rad(angulo_inclinacion)
-            
-            z_plataforma = z_estructura + 0.05
-            self._dibujar_plataforma_superior(z_plataforma, rot_rad)
-            
-            z_antena_base = z_plataforma + 0.02
-            self._dibujar_antena_art2000(z_antena_base, rot_rad, inc_rad)
-            
-            offset_antena = 0.15
-            x_beam = offset_antena * np.sin(rot_rad)
-            y_beam = offset_antena * np.cos(rot_rad)
-            z_beam = z_antena_base + 0.08
-            self._dibujar_beam_art2000(x_beam, y_beam, z_beam, rot_rad, inc_rad)
-            
+            self.ax.grid(True, alpha=0.15, color='gray')
+
+            rot = np.deg2rad(angulo_rotacion)
+            inc = np.deg2rad(-angulo_inclinacion)
+
+            # --- PLACA FIJA (no se mueve) ---
+            self._dibujar_placa_base()
+
+            # --- BASE GIRATORIA (rota en azimut) ---
+            self._dibujar_brackets(rot)
+            self._dibujar_componentes_base(rot)
+            self._dibujar_engranaje(rot)
+
+            # --- RADAR (rota en azimut + inclina en elevación) ---
+            self._dibujar_cuerpo_piramidal(rot, inc)
+            self._dibujar_plato_antena(rot, inc)
+            self._dibujar_beam(rot, inc)
+
             self.ax.set_title(
-                f'Bendix King ART 2000\nAzimuth: {angulo_rotacion:.1f}° | Elevation: {angulo_inclinacion:.1f}°',
-                color='white',
-                fontsize=11,
-                pad=15
+                f'ART 2000 — Az: {angulo_rotacion:.1f}°  El: {angulo_inclinacion:.1f}°',
+                color='white', fontsize=11, pad=10
             )
-            
+
             if es_nuevo:
-                self.ax.view_init(elev=25, azim=45)
+                self.ax.view_init(elev=25, azim=-50)
                 self.frameGG.canvas = FigureCanvasTkAgg(self.fig, master=self.frameGG)
                 self.frameGG.canvas.get_tk_widget().pack(fill="both", expand=True)
                 self.frameGG.canvas.draw()
@@ -573,298 +606,200 @@ class ResponsiveControlPanel:
             else:
                 self.ax.view_init(elev=self._view_elev, azim=self._view_azim)
                 self.frameGG.canvas.draw_idle()
-            
         except Exception as e:
             logger.error(f"Error en _crear_visualizacion_radar: {e}")
             self._radar_canvas_listo = False
-    
-    def _dibujar_base_art2000(self):
-        """Dibuja la base circular del Bendix King ART 2000 con ventilaciones."""
-        theta = np.linspace(0, 2*np.pi, 50)
-        radio_base = 0.28
-        
-        # Base circular principal (color beige/gris militar)
-        x_base = radio_base * np.cos(theta)
-        y_base = radio_base * np.sin(theta)
-        z_base = np.zeros_like(theta)
-        
-        self.ax.plot(x_base, y_base, z_base, color='#8B8680', linewidth=4, alpha=0.9)
-        
-        # Rellenar la base
+
+    # -------------------- PLACA FIJA --------------------
+
+    def _dibujar_placa_base(self):
+        """Placa circular oscura de montaje (fija)."""
         from matplotlib.patches import Circle
         from mpl_toolkits.mplot3d import art3d
-        
-        circle = Circle((0, 0), radio_base, color='#A8A49A', alpha=0.7)
+        circle = Circle((0, 0), 0.20, color='#1a1a1a', alpha=0.9)
         self.ax.add_patch(circle)
         art3d.pathpatch_2d_to_3d(circle, z=0, zdir="z")
-        
-        # Agregar ventilaciones (agujeros) alrededor del perímetro
-        num_ventilaciones = 24
-        radio_ventilacion = radio_base * 0.85
-        
-        for i in range(num_ventilaciones):
-            angulo = i * 2 * np.pi / num_ventilaciones
-            x_vent = radio_ventilacion * np.cos(angulo)
-            y_vent = radio_ventilacion * np.sin(angulo)
-            # Dibujar pequeños círculos como ventilaciones
-            self.ax.scatter([x_vent], [y_vent], [0.001], 
-                          color='#3a3a3a', s=15, alpha=0.8, marker='o')
-        
-        # Borde interno de la base
-        radio_interno = 0.15
-        x_interno = radio_interno * np.cos(theta)
-        y_interno = radio_interno * np.sin(theta)
-        self.ax.plot(x_interno, y_interno, np.zeros_like(theta), 
-                    color='#6B6860', linewidth=2, alpha=0.8)
-    
-    def _dibujar_estructura_montaje(self, altura):
-        """Dibuja la estructura de montaje cuadrada/rectangular del ART 2000."""
-        # Color gris militar
-        color_estructura = '#7C8577'
-        color_oscuro = '#5A5F54'
-        
-        # Dimensiones de la estructura (cuadrada/rectangular robusta)
-        lado = 0.20
-        
-        # Esquinas de la estructura
-        x_corners = [-lado/2, lado/2, lado/2, -lado/2, -lado/2]
-        y_corners = [-lado/2, -lado/2, lado/2, lado/2, -lado/2]
-        
-        # Dibujar base de la estructura (nivel inferior)
-        z_base = 0.02
-        self.ax.plot(x_corners, y_corners, [z_base]*5, 
-                    color=color_estructura, linewidth=3, alpha=0.9)
-        
-        # Dibujar parte superior de la estructura
-        self.ax.plot(x_corners, y_corners, [altura]*5, 
-                    color=color_estructura, linewidth=3, alpha=0.9)
-        
-        # Columnas verticales en las esquinas
-        for i in range(4):
-            x = x_corners[i]
-            y = y_corners[i]
-            self.ax.plot([x, x], [y, y], [z_base, altura], 
-                        color=color_oscuro, linewidth=4, alpha=0.9)
-        
-        # Paneles laterales (superficies)
+        theta = np.linspace(0, 2*np.pi, 60)
+        self.ax.plot(0.20*np.cos(theta), 0.20*np.sin(theta),
+                     np.zeros(60), color='#333', linewidth=2, alpha=0.9)
+
+    # -------------------- BASE GIRATORIA (solo azimut) --------------------
+
+    def _dibujar_brackets(self, rot):
+        """Paneles laterales en L (soportes del mecanismo). Rotan con azimut."""
+        h = 0.16
+        esp = 0.012
+        for s in [-1, 1]:
+            y0 = s * 0.155
+            y1 = s * (0.155 + esp)
+            ya, yb = min(y0, y1), max(y0, y1)
+            self._hacer_caja_rot(-0.14, 0.14, ya, yb, 0.005, h,
+                                 rot, '#222', alpha=0.85, edge='#383838')
+            self._hacer_caja_rot(-0.14, 0.14, ya - s*0.025, yb,
+                                 h, h + esp, rot, '#222', alpha=0.85, edge='#383838')
+
+    def _dibujar_componentes_base(self, rot):
+        """Motor, driver y piezas sobre la base. Rotan con azimut."""
+        self._hacer_caja_rot(-0.10, -0.06, -0.08, -0.04, 0.005, 0.045,
+                             rot, '#0b350b', alpha=0.9, edge='#0a0a0a')
+        self._hacer_caja_rot(0.04, 0.10, -0.08, -0.03, 0.005, 0.05,
+                             rot, '#1a1a1a', alpha=0.9, edge='#111')
+        self._hacer_caja_rot(-0.03, 0.03, -0.06, 0.06, 0.005, 0.04,
+                             rot, '#2a2a2a', alpha=0.8, edge='#1a1a1a')
+
+    def _dibujar_engranaje(self, rot):
+        """Corona dentada para transmisión de azimut. Rota con la base."""
+        theta = np.linspace(0, 2*np.pi, 80)
+        r = 0.135
+        z0, z1 = 0.04, 0.09
+        for z in [z0, z1]:
+            self.ax.plot(r*np.cos(theta + rot), r*np.sin(theta + rot),
+                         np.full(80, z), color='#3a3a3a', linewidth=1.0, alpha=0.7)
+        for i in range(36):
+            a = rot + i * 2*np.pi / 36
+            ro = r + (0.007 if i % 2 == 0 else 0)
+            self.ax.plot([ro*np.cos(a)]*2, [ro*np.sin(a)]*2,
+                         [z0, z1], color='#4a4a4a', linewidth=1.2, alpha=0.6)
+
+    # -------------------- RADAR (rota + inclina) --------------------
+
+    def _dibujar_cuerpo_piramidal(self, rot, inc):
+        """Cuerpo piramidal con caras planas del ART 2000 (cuña angular)."""
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-        
-        # Panel frontal
-        verts_front = [
-            [(-lado/2, -lado/2, z_base), (lado/2, -lado/2, z_base), 
-             (lado/2, -lado/2, altura), (-lado/2, -lado/2, altura)]
+        pivote_z = 0.09
+        # Base rectangular ancha, tapa rectangular angosta
+        bx, by = 0.13, 0.14
+        tx, ty = 0.06, 0.14
+        zb, zt = 0.0, 0.14
+
+        verts_bot = [(-bx, -by, zb), (bx, -by, zb), (bx, by, zb), (-bx, by, zb)]
+        verts_top = [(-tx, -ty, zt), (tx, -ty, zt), (tx, ty, zt), (-tx, ty, zt)]
+
+        def xf(p):
+            return self._transformar(p[0], p[1], p[2] + pivote_z, rot, inc, pivote_z)
+
+        tb = [xf(v) for v in verts_bot]
+        tt = [xf(v) for v in verts_top]
+
+        # 4 caras laterales
+        for i in range(4):
+            j = (i + 1) % 4
+            face = [tb[i], tb[j], tt[j], tt[i]]
+            c = '#4a4a4a' if i % 2 == 0 else '#3a3a3a'
+            self.ax.add_collection3d(Poly3DCollection(
+                [face], facecolors=c, linewidths=0.4,
+                edgecolors='#555', alpha=0.85
+            ))
+
+        # Tapa inferior y superior
+        self.ax.add_collection3d(Poly3DCollection(
+            [tb], facecolors='#2a2a2a', linewidths=0.3,
+            edgecolors='#3a3a3a', alpha=0.8
+        ))
+        self.ax.add_collection3d(Poly3DCollection(
+            [tt], facecolors='#505050', linewidths=0.3,
+            edgecolors='#606060', alpha=0.8
+        ))
+
+        # Motor (caja dorada en el lateral)
+        mx0, mx1 = bx * 0.5, bx * 0.95
+        my0, my1 = -by * 0.6, -by * 0.15
+        mz0, mz1 = 0.02, 0.07
+        motor_v = [
+            (mx0, my0, mz0), (mx1, my0, mz0), (mx1, my1, mz0), (mx0, my1, mz0),
+            (mx0, my0, mz1), (mx1, my0, mz1), (mx1, my1, mz1), (mx0, my1, mz1),
+        ]
+        mt = [xf(v) for v in motor_v]
+        motor_faces = [
+            [mt[0],mt[1],mt[2],mt[3]], [mt[4],mt[5],mt[6],mt[7]],
+            [mt[0],mt[1],mt[5],mt[4]], [mt[2],mt[3],mt[7],mt[6]],
+            [mt[0],mt[3],mt[7],mt[4]], [mt[1],mt[2],mt[6],mt[5]],
         ]
         self.ax.add_collection3d(Poly3DCollection(
-            verts_front, facecolors=color_estructura, 
-            linewidths=1, edgecolors=color_oscuro, alpha=0.6
+            motor_faces, facecolors='#B8A020', linewidths=0.3,
+            edgecolors='#806810', alpha=0.9
         ))
-        
-        # Panel trasero
-        verts_back = [
-            [(-lado/2, lado/2, z_base), (lado/2, lado/2, z_base), 
-             (lado/2, lado/2, altura), (-lado/2, lado/2, altura)]
-        ]
+
+    def _dibujar_plato_antena(self, rot, inc):
+        """Plato circular (slotted waveguide array) estilo ART 2000."""
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        pivote_z = 0.09
+        z_base_plato = 0.14 + pivote_z
+        espesor = 0.010
+        radio = 0.18
+        n_pts = 48
+
+        def xf(p):
+            return self._transformar(p[0], p[1], p[2] + z_base_plato, rot, inc, pivote_z)
+
+        theta = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
+        perfil = [(radio * np.cos(t), radio * np.sin(t)) for t in theta]
+
+        front = [xf((x, y, 0)) for x, y in perfil]
+        back = [xf((x, y, -espesor)) for x, y in perfil]
+
         self.ax.add_collection3d(Poly3DCollection(
-            verts_back, facecolors=color_estructura, 
-            linewidths=1, edgecolors=color_oscuro, alpha=0.6
+            [front], facecolors='#C0B890', linewidths=0.4,
+            edgecolors='#A09870', alpha=0.92
         ))
-        
-        # Motor central (cilindro negro)
-        self._dibujar_motor_central(altura)
-    
-    def _dibujar_motor_central(self, z_pos):
-        """Dibuja el motor/mecanismo central visible del ART 2000."""
-        theta = np.linspace(0, 2*np.pi, 30)
-        radio_motor = 0.06
-        altura_motor = 0.08
-        
-        # Cuerpo del motor (cilindro negro/gris oscuro)
-        z_levels = np.linspace(z_pos - 0.02, z_pos + altura_motor, 8)
-        
-        for z_level in z_levels:
-            x_motor = radio_motor * np.cos(theta)
-            y_motor = radio_motor * np.sin(theta)
-            z_motor = np.full_like(theta, z_level)
-            self.ax.plot(x_motor, y_motor, z_motor, 
-                        color='#2C2C2C', linewidth=1.5, alpha=0.8)
-        
-        # Detalles del motor (líneas verticales)
-        for i in range(6):
-            angulo = i * np.pi / 3
-            x_vert = [radio_motor * np.cos(angulo)] * 2
-            y_vert = [radio_motor * np.sin(angulo)] * 2
-            z_vert = [z_pos - 0.02, z_pos + altura_motor]
-            self.ax.plot(x_vert, y_vert, z_vert, 
-                        color='#1a1a1a', linewidth=2, alpha=0.9)
-        
-        # Centro del motor (eje)
-        self.ax.scatter([0], [0], [z_pos + altura_motor/2], 
-                       color='#4A4A4A', s=100, alpha=1.0, marker='o')
-    
-    def _dibujar_plataforma_superior(self, z_pos, rot_rad):
-        """Dibuja la plataforma superior rotatoria del ART 2000."""
-        # Plataforma rectangular grande con esquinas redondeadas
-        largo = 0.32
-        ancho = 0.28
-        color_plataforma = '#C0BDB5'  # Beige/plateado
-        
-        # Crear forma de la plataforma con esquinas redondeadas
-        # Puntos de la plataforma (sin rotar)
-        x_plat = []
-        y_plat = []
-        
-        # Lados largos y cortos con esquinas redondeadas
-        num_puntos = 50
-        for i in range(num_puntos):
-            t = i / num_puntos * 2 * np.pi
-            
-            if t < np.pi/2:  # Esquina 1
-                x_local = largo/2 - 0.02 + 0.02 * np.cos(t)
-                y_local = ancho/2 - 0.02 + 0.02 * np.sin(t)
-            elif t < np.pi:  # Esquina 2
-                x_local = -largo/2 + 0.02 - 0.02 * np.cos(t - np.pi/2)
-                y_local = ancho/2 - 0.02 + 0.02 * np.sin(t - np.pi/2)
-            elif t < 3*np.pi/2:  # Esquina 3
-                x_local = -largo/2 + 0.02 - 0.02 * np.cos(t - np.pi)
-                y_local = -ancho/2 + 0.02 - 0.02 * np.sin(t - np.pi)
-            else:  # Esquina 4
-                x_local = largo/2 - 0.02 + 0.02 * np.cos(t - 3*np.pi/2)
-                y_local = -ancho/2 + 0.02 - 0.02 * np.sin(t - 3*np.pi/2)
-            
-            # Aplicar rotación
-            x_rot = x_local * np.cos(rot_rad) - y_local * np.sin(rot_rad)
-            y_rot = x_local * np.sin(rot_rad) + y_local * np.cos(rot_rad)
-            
-            x_plat.append(x_rot)
-            y_plat.append(y_rot)
-        
-        x_plat.append(x_plat[0])
-        y_plat.append(y_plat[0])
-        
-        # Dibujar borde de la plataforma
-        self.ax.plot(x_plat, y_plat, [z_pos]*len(x_plat), 
-                    color='#8B8680', linewidth=3, alpha=0.9)
-        
-        # Agregar agujeros de montaje (puntos negros)
-        agujeros_config = [
-            (0.12, 0.10), (0.12, -0.10), (-0.12, 0.10), (-0.12, -0.10),
-            (0.08, 0), (-0.08, 0), (0, 0.08), (0, -0.08)
-        ]
-        
-        for dx, dy in agujeros_config:
-            # Rotar posición del agujero
-            x_aguj = dx * np.cos(rot_rad) - dy * np.sin(rot_rad)
-            y_aguj = dx * np.sin(rot_rad) + dy * np.cos(rot_rad)
-            self.ax.scatter([x_aguj], [y_aguj], [z_pos + 0.001], 
-                          color='#2a2a2a', s=20, alpha=0.9, marker='o')
-    
-    def _dibujar_antena_art2000(self, z_base, rot_rad, inc_rad):
-        """Dibuja la antena del radar ART 2000 (plato parabólico meteorológico)."""
-        # Posición de la antena (desplazada del centro)
-        offset = 0.15
-        x_center = offset * np.sin(rot_rad)
-        y_center = offset * np.cos(rot_rad)
-        z_center = z_base + 0.08
-        
-        # Crear plato parabólico
-        u = np.linspace(0, 2*np.pi, 25)
-        v = np.linspace(0, 1, 12)
-        U, V = np.meshgrid(u, v)
-        
-        # Dimensiones del plato
-        radio_plato = 0.12
-        profundidad = 0.04
-        
-        # Forma parabólica en coordenadas locales
-        X_local = radio_plato * V * np.cos(U)
-        Y_local = radio_plato * V * np.sin(U)
-        Z_local = -profundidad * V**2
-        
-        # Aplicar inclinación y rotación
-        cos_rot = np.cos(rot_rad)
-        sin_rot = np.sin(rot_rad)
-        cos_inc = np.cos(inc_rad)
-        sin_inc = np.sin(inc_rad)
-        
-        # Rotación alrededor de Z (azimuth)
-        X_rot1 = X_local * cos_rot - Y_local * sin_rot
-        Y_rot1 = X_local * sin_rot + Y_local * cos_rot
-        Z_rot1 = Z_local
-        
-        # Inclinación (elevation) - rotar alrededor del eje perpendicular
-        X_final = X_rot1 * cos_inc + Z_rot1 * sin_inc
-        Y_final = Y_rot1
-        Z_final = -X_rot1 * sin_inc + Z_rot1 * cos_inc
-        
-        # Trasladar a posición final
-        X_antena = x_center + X_final
-        Y_antena = y_center + Y_final
-        Z_antena = z_center + Z_final
-        
-        # Dibujar superficie del plato (color beige/dorado)
-        self.ax.plot_surface(X_antena, Y_antena, Z_antena, 
-                            color='#D4AF37', alpha=0.75, 
-                            edgecolor='#B8960F', linewidth=0.5)
-        
-        # Soporte de la antena (brazo corto)
-        x_soporte_base = offset * 0.5 * np.sin(rot_rad)
-        y_soporte_base = offset * 0.5 * np.cos(rot_rad)
-        
-        self.ax.plot([x_soporte_base, x_center], 
-                    [y_soporte_base, y_center],
-                    [z_base, z_center],
-                    color='#6B6860', linewidth=5, alpha=0.9)
-        
-        # Alimentador central (feed)
-        self.ax.scatter([x_center], [y_center], [z_center], 
-                       color='#8B4513', s=60, alpha=1.0, marker='s')
-    
-    def _dibujar_beam_art2000(self, x, y, z, rot_rad, inc_rad):
-        """Dibuja el haz de radiación del radar meteorológico."""
-        longitud_beam = 0.25
-        
-        # Vector dirección del beam (según rotación e inclinación)
-        dx = longitud_beam * np.cos(inc_rad) * np.sin(rot_rad)
-        dy = longitud_beam * np.cos(inc_rad) * np.cos(rot_rad)
-        dz = longitud_beam * np.sin(inc_rad)
-        
-        x_end = x + dx
-        y_end = y + dy
-        z_end = z + dz
-        
-        # Línea central del beam
-        self.ax.plot([x, x_end], [y, y_end], [z, z_end],
-                    color='#00FF41', linewidth=2.5, alpha=0.9, 
-                    linestyle='--')
-        
-        # Cono del beam (apertura de ~3 grados para radar meteorológico)
-        angulo_apertura = np.deg2rad(3)
-        
-        for i in range(12):
-            theta = i * 2 * np.pi / 12
-            r_offset = longitud_beam * np.tan(angulo_apertura)
-            
-            # Crear offset perpendicular al beam
-            # Vector perpendicular 1: perpendicular a la dirección del beam
-            perp1_x = -np.cos(rot_rad)
-            perp1_y = np.sin(rot_rad)
-            perp1_z = 0
-            
-            # Vector perpendicular 2: producto cruz
-            perp2_x = np.sin(inc_rad) * np.sin(rot_rad)
-            perp2_y = np.sin(inc_rad) * np.cos(rot_rad)
-            perp2_z = np.cos(inc_rad)
-            
-            x_offset = r_offset * (perp1_x * np.cos(theta) + perp2_x * np.sin(theta))
-            y_offset = r_offset * (perp1_y * np.cos(theta) + perp2_y * np.sin(theta))
-            z_offset = r_offset * (perp1_z * np.cos(theta) + perp2_z * np.sin(theta))
-            
-            x_cone = x_end + x_offset
-            y_cone = y_end + y_offset
-            z_cone = z_end + z_offset
-            
-            self.ax.plot([x, x_cone], [y, y_cone], [z, z_cone],
-                        color='#00FF41', linewidth=0.4, alpha=0.25)
+        self.ax.add_collection3d(Poly3DCollection(
+            [back], facecolors='#A8A078', linewidths=0.3,
+            edgecolors='#908868', alpha=0.85
+        ))
+
+        for i in range(n_pts):
+            j = (i + 1) % n_pts
+            face = [front[i], front[j], back[j], back[i]]
+            self.ax.add_collection3d(Poly3DCollection(
+                [face], facecolors='#B0A880', linewidths=0.2,
+                edgecolors='#908868', alpha=0.7
+            ))
+
+        # Ranuras diagonales (slots)
+        slot_len = 0.014
+        n_rows = 15
+        n_cols = 11
+        r_limit = radio * 0.82
+        for i in range(n_rows):
+            fy = -r_limit + (i + 1) * (2 * r_limit) / (n_rows + 1)
+            half_w = np.sqrt(max(0, r_limit**2 - fy**2))
+            offset = 0.007 if i % 2 == 0 else 0
+            for j in range(n_cols):
+                fx = -half_w + offset + (j + 1) * (2 * half_w) / (n_cols + 1)
+                if fx**2 + fy**2 > r_limit**2:
+                    continue
+                dx = slot_len * 0.7
+                dy = slot_len * 0.5
+                s1 = xf((fx - dx, fy - dy, 0.001))
+                s2 = xf((fx + dx, fy + dy, 0.001))
+                self.ax.plot([s1[0], s2[0]], [s1[1], s2[1]], [s1[2], s2[2]],
+                             color='#807058', linewidth=1.0, alpha=0.55)
+
+    def _dibujar_beam(self, rot, inc):
+        """Haz de radiación perpendicular al plato de la antena."""
+        pivote_z = 0.09
+        z_base_plato = 0.14 + pivote_z
+        longitud = 0.20
+
+        # Punto de emisión: centro del plato
+        x0, y0, z0 = self._transformar(0, 0, z_base_plato, rot, inc, pivote_z)
+        # Dirección: normal al plato (eje Z local positivo)
+        xn, yn, zn = self._transformar(0, 0, z_base_plato + longitud, rot, inc, pivote_z)
+
+        self.ax.plot([x0, xn], [y0, yn], [z0, zn],
+                     color='#00FF41', linewidth=2.5, alpha=0.9, linestyle='--')
+
+        # Cono del beam (~3° apertura)
+        apertura = np.deg2rad(3)
+        r_cone = longitud * np.tan(apertura)
+        for i in range(10):
+            t = i * 2 * np.pi / 10
+            dx_l = r_cone * np.cos(t)
+            dy_l = r_cone * np.sin(t)
+            xc, yc, zc = self._transformar(dx_l, dy_l, z_base_plato + longitud,
+                                           rot, inc, pivote_z)
+            self.ax.plot([x0, xc], [y0, yc], [z0, zc],
+                         color='#00FF41', linewidth=0.4, alpha=0.2)
     
     def actualizar_puertos(self):
         """Actualiza lista de puertos disponibles."""
@@ -949,9 +884,9 @@ class ResponsiveControlPanel:
             logger.debug(f"Error actualizando visualización en home: {e}")
         
         # Calcular tiempo de espera proporcional a la distancia angular
-        # ~50ms por grado, mínimo 3s, máximo 12s
+        # ~80ms por grado + 3s de margen, mínimo 4s, máximo 20s
         max_angulo = max(angulo_rot, angulo_inc)
-        tiempo_espera = max(3000, min(12000, int(max_angulo * 50) + 1500))
+        tiempo_espera = max(4000, min(20000, int(max_angulo * 80) + 3000))
         
         self.root.after(tiempo_espera, self._completar_desconexion)
     
@@ -961,7 +896,6 @@ class ResponsiveControlPanel:
         
         self.bt_actualizar.configure(state='normal')
         self.bt_conectar.configure(state='normal')
-        
         self.label_estado.configure(text="● Desconectado", text_color="red")
         messagebox.showinfo("Desconexión", "Motores en posición home.\nDesconectado del puerto serial.")
     
