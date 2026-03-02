@@ -1,123 +1,95 @@
-# 🚀 Cómo Compilar Software Radar - GUÍA RÁPIDA
+# Cómo Compilar Software Radar
 
-## ⚡ 3 Métodos (de más fácil a más avanzado)
+## Requisitos Previos
 
----
-
-### **Método 1: Super Simple (Recomendado si tienes problemas)**
-
-```bash
-build_simple.bat
-```
-
-✅ **Ventajas:**
-- Configuración mínima
-- Más compatible
-- Ve el progreso en tiempo real
-- Solo incluye lo esencial
+- **Python 3.x** instalado
+- Dependencias del proyecto instaladas:
+  ```bash
+  pip install -r requirements.txt
+  ```
+- **PyInstaller** (se instala automáticamente si no lo tienes)
 
 ---
 
-### **Método 2: Script Python Completo**
+## Compilar el Ejecutable
+
+Desde la raíz del proyecto, ejecuta:
 
 ```bash
 python build_exe.py
 ```
 
-✅ **Ventajas:**
-- Incluye todas las características
-- Manejo robusto de errores
-- Reportes detallados
+El script se encarga de todo automáticamente:
+
+1. Verifica que estés en el directorio correcto
+2. Limpia builds anteriores (`build/`, `dist/`, `__pycache__/`, archivos `.spec`)
+3. Instala PyInstaller si no está disponible
+4. Detecta e incluye el icono del proyecto si existe
+5. Incluye las carpetas de recursos (`assets/`, `imagenes/`)
+6. Empaqueta todas las dependencias necesarias (CustomTkinter, Matplotlib, NumPy, Cartopy, etc.)
+7. Genera un ejecutable único con `--onefile --windowed`
 
 ---
 
-### **Método 3: Comando Manual (Para expertos)**
-
-```bash
-python -m PyInstaller --name=SoftwareRadar --onefile --windowed run.py
-```
-
-✅ **Ventajas:**
-- Control total
-- Más rápido
-- Personalizable
-
----
-
-## 🎯 ¿Cuál usar?
-
-| Situación | Método Recomendado |
-|-----------|-------------------|
-| **Primera vez compilando** | `build_simple.bat` |
-| **Tuviste errores antes** | `build_simple.bat` |
-| **Quieres todas las funciones** | `python build_exe.py` |
-| **Sabes lo que haces** | Comando manual |
-
----
-
-## 📦 Resultado
-
-Todos crean el mismo resultado:
+## Resultado
 
 ```
 dist/
-└── SoftwareRadar.exe    (150-300 MB)
+└── SoftwareRadar.exe
 ```
+
+El ejecutable no requiere Python instalado en la PC destino.
 
 ---
 
-## ⏱️ Tiempo de Compilación
+## Estructura de Datos para el Ejecutable
+
+Para usar archivos CSV de lecturas del radar, crea esta estructura junto al `.exe`:
+
+```
+SoftwareRadar.exe
+└── output/
+    └── Lecturas RADAR/
+        └── tu_archivo.csv
+```
+
+La aplicación crea estas carpetas automáticamente si no existen. Si no hay archivos CSV, puedes usar el modo DEMO en el panel de mapa.
+
+---
+
+## Tiempo de Compilación
 
 - **Primera vez**: 8-12 minutos
 - **Compilaciones siguientes**: 5-8 minutos
 
 ---
 
-## ✅ Pasos Después de Compilar
+## Probar el Ejecutable
 
-1. **Probar en tu PC:**
-   ```bash
-   cd dist
-   .\SoftwareRadar.exe
-   ```
-
-2. **Probar en otra PC** (sin Python)
-
-3. **Distribuir** el archivo .exe
+```bash
+cd dist
+.\SoftwareRadar.exe
+```
 
 ---
 
-## 🐛 Si Hay Errores
+## Solución de Errores
 
-### Error: "No module named PyInstaller"
+### "No module named PyInstaller"
 ```bash
-python -m pip install pyinstaller
+pip install pyinstaller
 ```
 
-### Error: "No module named XXX"
+### "No module named XXX"
 ```bash
 pip install -r requirements.txt
 ```
 
-### Error: Antivirus bloquea
-- Agregar excepción para el ejecutable
-- Es normal, el código es seguro
+### El antivirus bloquea el ejecutable
+Agrega una excepción para el archivo. Es un falso positivo común con ejecutables generados por PyInstaller.
 
----
-
-## 💡 Consejo
-
-**Si `build.bat` no funciona, usa `build_simple.bat`**
-
-Es más directo y tiene menos problemas.
-
----
-
-## 📚 Documentación Completa
-
-Para más detalles: `BUILD_EXECUTABLE.md`
-
----
-
-**¡Listo para compilar! Elige un método y ejecuta.** 🎉
-
+### Error inesperado
+Intenta compilar manualmente para ver el error detallado:
+```bash
+python -m PyInstaller --onefile --windowed run.py
+```
