@@ -518,39 +518,6 @@ class ResponsiveControlPanel:
         x_r, y_r = self._rotar_z(x_i, y, rot)
         return x_r, y_r, z_i
 
-    def _hacer_caja(self, x0, x1, y0, y1, z0, z1, color, alpha=0.7, edge='#1a1a1a'):
-        """Dibuja un paralelepípedo (caja) como Poly3DCollection."""
-        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-        v = [
-            [(x0,y0,z0),(x1,y0,z0),(x1,y1,z0),(x0,y1,z0)],
-            [(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)],
-            [(x0,y0,z0),(x1,y0,z0),(x1,y0,z1),(x0,y0,z1)],
-            [(x0,y1,z0),(x1,y1,z0),(x1,y1,z1),(x0,y1,z1)],
-            [(x0,y0,z0),(x0,y1,z0),(x0,y1,z1),(x0,y0,z1)],
-            [(x1,y0,z0),(x1,y1,z0),(x1,y1,z1),(x1,y0,z1)],
-        ]
-        self.ax.add_collection3d(Poly3DCollection(
-            v, facecolors=color, linewidths=0.5, edgecolors=edge, alpha=alpha
-        ))
-
-    def _hacer_caja_rot(self, x0, x1, y0, y1, z0, z1, rot, color, alpha=0.7, edge='#1a1a1a'):
-        """Dibuja una caja rotada alrededor del eje Z."""
-        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-        corners = [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]
-        rc = [self._rotar_z(x, y, rot) for x, y in corners]
-        bot = [(x, y, z0) for x, y in rc]
-        top = [(x, y, z1) for x, y in rc]
-        v = [
-            bot, top,
-            [bot[0], bot[1], top[1], top[0]],
-            [bot[1], bot[2], top[2], top[1]],
-            [bot[2], bot[3], top[3], top[2]],
-            [bot[3], bot[0], top[0], top[3]],
-        ]
-        self.ax.add_collection3d(Poly3DCollection(
-            v, facecolors=color, linewidths=0.5, edgecolors=edge, alpha=alpha
-        ))
-
     def _crear_visualizacion_radar(self, angulo_rotacion, angulo_inclinacion):
         """Crea o actualiza la visualización 3D del radar ART 2000."""
         try:
@@ -584,7 +551,6 @@ class ResponsiveControlPanel:
 
             # --- BASE GIRATORIA (rota en azimut) ---
             self._dibujar_brackets(rot)
-            self._dibujar_componentes_base(rot)
             self._dibujar_engranaje(rot)
 
             # --- RADAR (rota en azimut + inclina en elevación) ---
@@ -623,6 +589,24 @@ class ResponsiveControlPanel:
         self.ax.plot(0.20*np.cos(theta), 0.20*np.sin(theta),
                      np.zeros(60), color='#333', linewidth=2, alpha=0.9)
 
+    def _hacer_caja_rot(self, x0, x1, y0, y1, z0, z1, rot, color, alpha=0.7, edge='#1a1a1a'):
+        """Dibuja una caja rotada alrededor del eje Z."""
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        corners = [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]
+        rc = [self._rotar_z(x, y, rot) for x, y in corners]
+        bot = [(x, y, z0) for x, y in rc]
+        top = [(x, y, z1) for x, y in rc]
+        v = [
+            bot, top,
+            [bot[0], bot[1], top[1], top[0]],
+            [bot[1], bot[2], top[2], top[1]],
+            [bot[2], bot[3], top[3], top[2]],
+            [bot[3], bot[0], top[0], top[3]],
+        ]
+        self.ax.add_collection3d(Poly3DCollection(
+            v, facecolors=color, linewidths=0.5, edgecolors=edge, alpha=alpha
+        ))
+
     # -------------------- BASE GIRATORIA (solo azimut) --------------------
 
     def _dibujar_brackets(self, rot):
@@ -637,15 +621,6 @@ class ResponsiveControlPanel:
                                  rot, '#222', alpha=0.85, edge='#383838')
             self._hacer_caja_rot(-0.14, 0.14, ya - s*0.025, yb,
                                  h, h + esp, rot, '#222', alpha=0.85, edge='#383838')
-
-    def _dibujar_componentes_base(self, rot):
-        """Motor, driver y piezas sobre la base. Rotan con azimut."""
-        self._hacer_caja_rot(-0.10, -0.06, -0.08, -0.04, 0.005, 0.045,
-                             rot, '#0b350b', alpha=0.9, edge='#0a0a0a')
-        self._hacer_caja_rot(0.04, 0.10, -0.08, -0.03, 0.005, 0.05,
-                             rot, '#1a1a1a', alpha=0.9, edge='#111')
-        self._hacer_caja_rot(-0.03, 0.03, -0.06, 0.06, 0.005, 0.04,
-                             rot, '#2a2a2a', alpha=0.8, edge='#1a1a1a')
 
     def _dibujar_engranaje(self, rot):
         """Corona dentada para transmisión de azimut. Rota con la base."""
@@ -699,25 +674,6 @@ class ResponsiveControlPanel:
         self.ax.add_collection3d(Poly3DCollection(
             [tt], facecolors='#505050', linewidths=0.3,
             edgecolors='#606060', alpha=0.8
-        ))
-
-        # Motor (caja dorada en el lateral)
-        mx0, mx1 = bx * 0.5, bx * 0.95
-        my0, my1 = -by * 0.6, -by * 0.15
-        mz0, mz1 = 0.02, 0.07
-        motor_v = [
-            (mx0, my0, mz0), (mx1, my0, mz0), (mx1, my1, mz0), (mx0, my1, mz0),
-            (mx0, my0, mz1), (mx1, my0, mz1), (mx1, my1, mz1), (mx0, my1, mz1),
-        ]
-        mt = [xf(v) for v in motor_v]
-        motor_faces = [
-            [mt[0],mt[1],mt[2],mt[3]], [mt[4],mt[5],mt[6],mt[7]],
-            [mt[0],mt[1],mt[5],mt[4]], [mt[2],mt[3],mt[7],mt[6]],
-            [mt[0],mt[3],mt[7],mt[4]], [mt[1],mt[2],mt[6],mt[5]],
-        ]
-        self.ax.add_collection3d(Poly3DCollection(
-            motor_faces, facecolors='#B8A020', linewidths=0.3,
-            edgecolors='#806810', alpha=0.9
         ))
 
     def _dibujar_plato_antena(self, rot, inc):
